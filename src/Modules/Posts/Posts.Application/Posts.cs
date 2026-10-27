@@ -1,3 +1,5 @@
+using System.Diagnostics.Metrics;
+
 using Microsoft.Extensions.DependencyInjection;
 
 using Posts.Contracts;
@@ -12,6 +14,16 @@ namespace Posts.Application;
 public static class ModuleName
 {
     public const string Value = "Posts";
+}
+
+/// <summary>The first acknowledgment as a number: posts stored.</summary>
+public static class PostsMetrics
+{
+    public const string MeterName = "Social.Posts";
+
+    private static readonly Meter Meter = new(MeterName);
+
+    public static readonly Counter<long> Stored = Meter.CreateCounter<long>("social.posts.stored", "{post}", "Posts committed with their PostPublished");
 }
 
 /// <summary>Where posts are kept.</summary>
@@ -70,6 +82,7 @@ public sealed class PublishPostHandler(
             var post = written.Value;
             await posts.Add(post, ct);
             await outbox.Add(new PostPublished(Guid.CreateVersion7(), post.CreatedAt, post.Id, post.AuthorId, post.CreatedAt, post.Text), ct);
+            PostsMetrics.Stored.Add(1);
             return Result.Success(PostView.Of(post));
         }, cancellationToken);
 }

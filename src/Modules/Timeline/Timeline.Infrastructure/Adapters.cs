@@ -27,7 +27,7 @@ internal sealed class FanOutOnPostPublished(IDispatcher dispatcher) : IIntegrati
 {
     public async Task Handle(PostPublished integrationEvent, CancellationToken cancellationToken)
     {
-        var result = await dispatcher.Send<FanOut, FanOutResult>(new FanOut(integrationEvent.PostId, integrationEvent.AuthorId), cancellationToken);
+        var result = await dispatcher.Send<FanOut, FanOutResult>(new FanOut(integrationEvent.PostId, integrationEvent.AuthorId, integrationEvent.CreatedAt), cancellationToken);
         if (!result.IsSuccess)
         {
             throw new InvalidOperationException($"Fanout of {integrationEvent.PostId} failed: {result.Errors[0].Code}");

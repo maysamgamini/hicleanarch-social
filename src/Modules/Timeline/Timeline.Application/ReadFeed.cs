@@ -27,7 +27,7 @@ public sealed record FeedPage(IReadOnlyList<FeedItem> Items, string? NextCursor)
 /// no longer followed by the reader is dropped; the reader's own posts are always kept.
 /// </summary>
 public sealed class ReadFeedHandler(
-    ITimelines timelines, IPostSummaries posts, IProfiles profiles, IFollowing following, IHiddenAuthors hidden, FeedCursors cursors)
+    ITimelines timelines, IPostSummaries posts, IProfiles profiles, IFollowing following, IHiddenAuthors hidden, ISeenPosts seen, FeedCursors cursors)
     : IQueryHandler<ReadFeed, FeedPage>
 {
     public const int DefaultLimit = 20;
@@ -79,6 +79,7 @@ public sealed class ReadFeedHandler(
         // Only a read keeps a timeline alive; a fanout never does.
         await timelines.Touch(reader, cancellationToken);
         var page = items.Take(limit).ToList();
+        await seen.Saw(reader, [.. page.Select(i => i.Post)], cancellationToken);
         var more = page.Count > 0 && (items.Count > limit || !exhausted);
         var next = more ? cursors.Issue(reader, new FeedPosition(TimelineRules.Score(page[^1].Post.PostId), page[^1].Post.PostId)) : null;
         return Result.Success(new FeedPage(page, next));

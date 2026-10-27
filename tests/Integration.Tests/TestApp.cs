@@ -30,7 +30,8 @@ public static class TestApp
                 .UseSetting("ConnectionStrings:Valkey", database.Valkey)
                 .UseSetting("Auth:ClientId", ClientId)
                 .UseSetting("Auth:LocalSigningKey", SigningKey)
-                .UseSetting("Timeline:Cursor:Keys:Current", CursorKey);
+                .UseSetting("Timeline:Cursor:Keys:Current", CursorKey)
+                .UseSetting("Timeline:SeenSampleRate", "1");
             foreach (var module in TestDatabase.Modules)
             {
                 web.UseSetting($"ConnectionStrings:{module}", database.For(module));

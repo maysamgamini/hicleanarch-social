@@ -174,3 +174,20 @@ run "no_service_before_the_first_migration" {
     error_message = "A new environment gets its service only after the release has been migrated."
   }
 }
+
+run "the_acknowledgments_have_alarms_on_metrics_the_program_emits" {
+  command = apply
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.fanout_lag.threshold == 60 && aws_cloudwatch_metric_alarm.fanout_lag.extended_statistic == "p99"
+    error_message = "Fanned out within a minute at p99 is the alarm's line."
+  }
+
+  assert {
+    condition = alltrue([
+      contains(local.metrics, aws_cloudwatch_metric_alarm.fanout_lag.metric_name),
+      contains(local.metrics, aws_cloudwatch_metric_alarm.outbox_age.metric_name),
+    ])
+    error_message = "Every alarm names a metric the program emits."
+  }
+}

@@ -35,13 +35,6 @@ resource "aws_elasticache_replication_group" "valkey" {
   apply_immediately          = true
 }
 
-resource "aws_secretsmanager_secret" "valkey" {
-  name                    = "${var.project}/sandbox/valkey"
-  recovery_window_in_days = 0
-}
-
-resource "aws_secretsmanager_secret_version" "valkey" {
-  secret_id                = aws_secretsmanager_secret.valkey.id
-  secret_string_wo         = "${aws_elasticache_replication_group.valkey.primary_endpoint_address}:6379,ssl=true,abortConnect=false"
-  secret_string_wo_version = 1
+locals {
+  valkey_address = aws_elasticache_replication_group.valkey.primary_endpoint_address
 }

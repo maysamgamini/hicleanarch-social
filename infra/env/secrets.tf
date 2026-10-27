@@ -12,6 +12,7 @@ locals {
     accounts      = "accounts_app"
     relationships = "relationships_app"
     posts         = "posts_app"
+    timeline      = "timeline_app"
   }
 
   # TLS with the server's certificate checked against the RDS CA bundle, which the image carries.
@@ -62,5 +63,18 @@ resource "aws_secretsmanager_secret" "cursor_key" {
 resource "aws_secretsmanager_secret_version" "cursor_key" {
   secret_id                = aws_secretsmanager_secret.cursor_key.id
   secret_string_wo         = ephemeral.random_password.cursor_key.result
+  secret_string_wo_version = 1
+}
+
+# Where the timelines live (valkey.tf); a secret like the others, so every address reaches the
+# tasks the same way.
+resource "aws_secretsmanager_secret" "valkey" {
+  name                    = "${var.project}/sandbox/valkey"
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "valkey" {
+  secret_id                = aws_secretsmanager_secret.valkey.id
+  secret_string_wo         = "${local.valkey_address}:6379,ssl=true,abortConnect=false"
   secret_string_wo_version = 1
 }

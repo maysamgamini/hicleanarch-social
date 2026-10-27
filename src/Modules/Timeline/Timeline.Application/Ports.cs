@@ -81,3 +81,26 @@ public interface IHiddenAuthors
 {
     Task<IReadOnlyCollection<Guid>> Of(Guid reader, CancellationToken cancellationToken);
 }
+
+/// <summary>A post's fanout as Timeline recorded it: when it was stored, how far it got, when it ended.</summary>
+public sealed record Delivery(Guid PostId, Guid AuthorId, DateTimeOffset StoredAt, long FollowersReached, DateTimeOffset? FannedOutAt);
+
+/// <summary>Timeline's own record of each post's fanout, in its own schema.</summary>
+public interface IFanoutProgress
+{
+    /// <summary>Starts the record, unless it exists; returns it as it now is.</summary>
+    Task<Delivery> Start(Guid postId, Guid authorId, DateTimeOffset storedAt, CancellationToken cancellationToken);
+
+    Task Reached(Guid postId, long followers, CancellationToken cancellationToken);
+
+    /// <summary>Marks the fanout complete. True only for the call that completed it, so the lag is measured once.</summary>
+    Task<bool> Complete(Guid postId, DateTimeOffset at, CancellationToken cancellationToken);
+
+    Task<Delivery?> Find(Guid postId, CancellationToken cancellationToken);
+}
+
+/// <summary>The last acknowledgment, seen: the first time a reader's page holds a post, sampled.</summary>
+public interface ISeenPosts
+{
+    Task Saw(Guid reader, IReadOnlyList<PostCard> posts, CancellationToken cancellationToken);
+}

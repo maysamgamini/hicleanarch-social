@@ -48,9 +48,10 @@ provider "aws" {
   }
 }
 
-# database.tf is not applied here; the connection strings need only its host name.
+# database.tf and valkey.tf are not applied here; the secrets need only their host names.
 locals {
-  db_host = "database.moto.invalid"
+  db_host        = "database.moto.invalid"
+  valkey_address = "valkey.moto.invalid"
 }
 HCL
 

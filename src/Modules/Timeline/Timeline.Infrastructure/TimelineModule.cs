@@ -14,9 +14,13 @@ using Social.BuildingBlocks.Application;
 using Social.BuildingBlocks.Infrastructure;
 using Social.BuildingBlocks.Infrastructure.Events;
 using Social.BuildingBlocks.Infrastructure.Identity;
+using Social.BuildingBlocks.Infrastructure.Persistence;
 using Social.BuildingBlocks.Infrastructure.Valkey;
 
+using Microsoft.EntityFrameworkCore;
+
 using Timeline.Application;
+using Timeline.Infrastructure.Persistence;
 
 namespace Timeline.Infrastructure;
 
@@ -32,6 +36,11 @@ public static class TimelineModule
         }
 
         services.AddSharedValkey(configuration);
+        var connectionString = configuration.GetConnectionString("Timeline")
+            ?? throw new InvalidOperationException("ConnectionStrings:Timeline is not set.");
+        services.AddDbContext<TimelineDbContext>(db => TimelineDbOptions.Configure((DbContextOptionsBuilder<TimelineDbContext>)db, connectionString));
+        services.AddSingleton<IModuleMigrator, TimelineMigrator>();
+        services.AddSingleton(new ModuleDatabase("Timeline", TimelineDbContext.Schema, connectionString));
         var keys = configuration.GetSection("Timeline:Cursor:Keys");
         services.AddSingleton(new FeedCursors(new CursorKeys(
             keys["Current"] ?? throw new InvalidOperationException("Timeline:Cursor:Keys:Current is not set: feed cursors are signed with it."),
@@ -50,7 +59,9 @@ public static class TimelineModule
             .AddScoped<IPostSummaries, InProcessPostSummaries>()
             .AddScoped<IProfiles, InProcessProfiles>()
             .AddScoped<IFollowing, InProcessFollowing>()
-            .AddScoped<IHiddenAuthors, InProcessHiddenAuthors>();
+            .AddScoped<IHiddenAuthors, InProcessHiddenAuthors>()
+            .AddScoped<IFanoutProgress, SqlFanoutProgress>()
+            .AddSingleton<ISeenPosts, SampledSeenPosts>();
     }
 
     public static IEndpointRouteBuilder MapTimelineEndpoints(this IEndpointRouteBuilder app)
@@ -64,9 +75,20 @@ public static class TimelineModule
                 : page.Errors.ToProblem(page.Errors[0].Code == FeedCursors.Invalid.Code ? StatusCodes.Status400BadRequest : null);
         }).WithTags("Timeline");
 
+        // Which acknowledgments a post has reached, for its author: stored, then fanned out.
+        app.MapGet("/v1/posts/{id:guid}/delivery", async (Guid id, ClaimsPrincipal user, IDispatcher dispatcher, CancellationToken ct) =>
+        {
+            var delivery = await dispatcher.Query<GetDelivery, Delivery>(new GetDelivery(id, user.UserId()), ct);
+            return delivery.IsSuccess
+                ? Results.Ok(new DeliveryReply(delivery.Value.PostId, delivery.Value.StoredAt, delivery.Value.FannedOutAt, delivery.Value.FollowersReached))
+                : delivery.Errors.ToProblem();
+        }).WithTags("Timeline");
+
         return app;
     }
 }
+
+internal sealed record DeliveryReply(Guid PostId, DateTimeOffset StoredAt, DateTimeOffset? FannedOutAt, long FollowersReached);
 
 internal sealed record FeedReply(IReadOnlyList<FeedItemReply> Items, string? NextCursor, bool HasMore)
 {
