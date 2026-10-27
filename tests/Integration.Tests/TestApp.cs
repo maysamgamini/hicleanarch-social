@@ -14,11 +14,13 @@ public static class TestApp
 
     public const string SigningKey = "test-only-signing-key-0123456789abcdef";
 
+    public const string CursorKey = "test-only-cursor-key-0123456789abcdef";
+
     /// <summary>A token for the given person, shaped like a Cognito access token.</summary>
     public static string Token(Guid userId) => LocalTokens.Issue(SigningKey, ClientId, userId);
 
     /// <summary>A fresh host process on this database: a new host is what a restart looks like.</summary>
-    public static WebApplicationFactory<Program> Start(TestDatabase database, Action<IServiceCollection>? services = null) =>
+    public static WebApplicationFactory<Program> Start(TestDatabase database, Action<IServiceCollection>? services = null, Action<IWebHostBuilder>? settings = null) =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(web =>
         {
             web.UseEnvironment("Testing")
@@ -27,11 +29,15 @@ public static class TestApp
                 .UseSetting("ConnectionStrings:Owner", database.Owner)
                 .UseSetting("ConnectionStrings:Valkey", database.Valkey)
                 .UseSetting("Auth:ClientId", ClientId)
-                .UseSetting("Auth:LocalSigningKey", SigningKey);
+                .UseSetting("Auth:LocalSigningKey", SigningKey)
+                .UseSetting("Timeline:Cursor:Keys:Current", CursorKey);
             foreach (var module in TestDatabase.Modules)
             {
                 web.UseSetting($"ConnectionStrings:{module}", database.For(module));
             }
+
+            // Last, so a test's own settings win.
+            settings?.Invoke(web);
         });
 
     /// <summary>A client signed in as <paramref name="userId"/>, or anonymous when it is null.</summary>
@@ -75,9 +81,9 @@ public abstract class IntegrationTest(Postgres postgres) : IAsyncLifetime
     }
 
     /// <summary>A host on this test's database, stopped when the test ends.</summary>
-    protected WebApplicationFactory<Program> StartHost(Action<IServiceCollection>? services = null)
+    protected WebApplicationFactory<Program> StartHost(Action<IServiceCollection>? services = null, Action<IWebHostBuilder>? settings = null)
     {
-        var host = TestApp.Start(Db, services);
+        var host = TestApp.Start(Db, services, settings);
         _hosts.Add(host);
         return host;
     }

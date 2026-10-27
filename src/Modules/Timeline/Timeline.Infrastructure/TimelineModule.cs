@@ -30,6 +30,10 @@ public static class TimelineModule
         }
 
         services.AddSharedValkey(configuration);
+        var keys = configuration.GetSection("Timeline:Cursor:Keys");
+        services.AddSingleton(new FeedCursors(new CursorKeys(
+            keys["Current"] ?? throw new InvalidOperationException("Timeline:Cursor:Keys:Current is not set: feed cursors are signed with it."),
+            keys["Previous"])));
         // Adding a member that is already there changes nothing, so the fanout needs no inbox.
         services.AddModuleWithoutInbox(ModuleName.Value);
         services.AddEventHandler<PostPublished, FanOutOnPostPublished>(ModuleName.Value);
@@ -44,19 +48,22 @@ public static class TimelineModule
 
     public static IEndpointRouteBuilder MapTimelineEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/v1/feed", async (int? limit, ClaimsPrincipal user, IDispatcher dispatcher, CancellationToken ct) =>
+        app.MapGet("/v1/feed", async (int? limit, string? cursor, ClaimsPrincipal user, IDispatcher dispatcher, CancellationToken ct) =>
         {
-            var page = await dispatcher.Query<ReadFeed, FeedPage>(new ReadFeed(user.UserId(), limit ?? ReadFeedHandler.DefaultLimit), ct);
-            return page.IsSuccess ? Results.Ok(FeedReply.Of(page.Value)) : page.Errors.ToProblem();
+            var page = await dispatcher.Query<ReadFeed, FeedPage>(new ReadFeed(user.UserId(), limit ?? ReadFeedHandler.DefaultLimit, cursor), ct);
+            return page.IsSuccess
+                ? Results.Ok(FeedReply.Of(page.Value))
+                // A bad cursor is a malformed request, not a rule broken: 400.
+                : page.Errors.ToProblem(page.Errors[0].Code == FeedCursors.Invalid.Code ? StatusCodes.Status400BadRequest : null);
         }).WithTags("Timeline");
 
         return app;
     }
 }
 
-internal sealed record FeedReply(IReadOnlyList<FeedItemReply> Items, bool HasMore)
+internal sealed record FeedReply(IReadOnlyList<FeedItemReply> Items, string? NextCursor, bool HasMore)
 {
-    public static FeedReply Of(FeedPage page) => new([.. page.Items.Select(FeedItemReply.Of)], page.HasMore);
+    public static FeedReply Of(FeedPage page) => new([.. page.Items.Select(FeedItemReply.Of)], page.NextCursor, page.NextCursor is not null);
 }
 
 internal sealed record AuthorReply(Guid AccountId, string Handle, string DisplayName);

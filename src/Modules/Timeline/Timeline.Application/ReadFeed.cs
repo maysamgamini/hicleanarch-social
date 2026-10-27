@@ -6,11 +6,12 @@ using Timeline.Domain;
 namespace Timeline.Application;
 
 /// <summary>The reader's home feed: their newest posts, from the accounts they follow and their own.</summary>
-public sealed record ReadFeed(Guid ReaderId, int Limit) : IQuery<FeedPage>;
+public sealed record ReadFeed(Guid ReaderId, int Limit, string? Cursor = null) : IQuery<FeedPage>;
 
 public sealed record FeedItem(PostCard Post, AuthorCard Author);
 
-public sealed record FeedPage(IReadOnlyList<FeedItem> Items, bool HasMore);
+/// <summary><paramref name="NextCursor"/> continues after the last item; null when nothing older remains.</summary>
+public sealed record FeedPage(IReadOnlyList<FeedItem> Items, string? NextCursor);
 
 /// <summary>
 /// A page of the feed: the timeline gives ids in time order, Posts and Accounts give their content in
@@ -18,8 +19,11 @@ public sealed record FeedPage(IReadOnlyList<FeedItem> Items, bool HasMore);
 /// leave the page short, the next 25, at most three rounds. A reader with no timeline gets one built
 /// first: created empty (with its sentinel) before it is filled, so a fanout running during the
 /// build already finds it and is not lost.
+/// A later page starts at the cursor's score, inclusive, and drops the entries of that same score at
+/// or above the cursor's post id: posts arriving at the top move no boundary, and two posts in the
+/// same millisecond are each shown once.
 /// </summary>
-public sealed class ReadFeedHandler(ITimelines timelines, IPostSummaries posts, IProfiles profiles, IFollowing following)
+public sealed class ReadFeedHandler(ITimelines timelines, IPostSummaries posts, IProfiles profiles, IFollowing following, FeedCursors cursors)
     : IQueryHandler<ReadFeed, FeedPage>
 {
     public const int DefaultLimit = 20;
@@ -36,6 +40,18 @@ public sealed class ReadFeedHandler(ITimelines timelines, IPostSummaries posts, 
     {
         var reader = query.ReaderId;
         var limit = Math.Clamp(query.Limit, 1, MaxLimit);
+        FeedPosition? after = null;
+        if (query.Cursor is not null)
+        {
+            var position = cursors.Read(reader, query.Cursor);
+            if (!position.IsSuccess)
+            {
+                return Result.Failure<FeedPage>(position.Errors);
+            }
+
+            after = position.Value;
+        }
+
         if (!await timelines.Exists(reader, cancellationToken))
         {
             await Build(reader, cancellationToken);
@@ -47,16 +63,24 @@ public sealed class ReadFeedHandler(ITimelines timelines, IPostSummaries posts, 
         for (var round = 0; round < Rounds && items.Count < limit && !exhausted; round++)
         {
             var want = limit + 5;
-            var entries = await timelines.Read(reader, null, read, want, cancellationToken);
+            var entries = await timelines.Read(reader, after?.Score, read, want, cancellationToken);
             read += entries.Count;
             exhausted = entries.Count < want;
-            items.AddRange(await Hydrate(entries, cancellationToken));
+            items.AddRange(await Hydrate([.. entries.Where(e => After(e, after))], cancellationToken));
         }
 
         // Only a read keeps a timeline alive; a fanout never does.
         await timelines.Touch(reader, cancellationToken);
-        return Result.Success(new FeedPage([.. items.Take(limit)], items.Count > limit || !exhausted));
+        var page = items.Take(limit).ToList();
+        var more = page.Count > 0 && (items.Count > limit || !exhausted);
+        var next = more ? cursors.Issue(reader, new FeedPosition(TimelineRules.Score(page[^1].Post.PostId), page[^1].Post.PostId)) : null;
+        return Result.Success(new FeedPage(page, next));
     }
+
+    /// <summary>The tie filter: at the cursor's own score, only ids below the cursor's are still to come.</summary>
+    private static bool After(Entry entry, FeedPosition? cursor) =>
+        cursor is null || entry.Score < cursor.Score
+        || string.CompareOrdinal(TimelineRules.Member(entry.PostId), TimelineRules.Member(cursor.PostId)) < 0;
 
     private async Task Build(Guid reader, CancellationToken cancellationToken)
     {

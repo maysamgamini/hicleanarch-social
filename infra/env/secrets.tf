@@ -46,3 +46,21 @@ resource "aws_secretsmanager_secret_version" "connection" {
   secret_string_wo         = local.connection_strings[each.key]
   secret_string_wo_version = 1
 }
+
+# The key feed cursors are signed with (Timeline:Cursor:Keys:Current). Rotating it: move the value to
+# a Previous secret first, so the cursors already handed out keep working for a page or two.
+ephemeral "random_password" "cursor_key" {
+  length  = 48
+  special = false
+}
+
+resource "aws_secretsmanager_secret" "cursor_key" {
+  name                    = "${var.project}/sandbox/timeline/cursor-key"
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "cursor_key" {
+  secret_id                = aws_secretsmanager_secret.cursor_key.id
+  secret_string_wo         = ephemeral.random_password.cursor_key.result
+  secret_string_wo_version = 1
+}

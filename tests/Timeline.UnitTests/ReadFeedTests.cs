@@ -9,6 +9,8 @@ public class ReadFeedTests
     private static readonly Guid Reader = Guid.NewGuid();
     private static readonly Guid Author = Guid.NewGuid();
 
+    private static readonly FeedCursors Cursors = new(new CursorKeys("unit-test-cursor-key-0123456789", null));
+
     /// <summary>Posts and profiles in memory; a post can be deleted, and every call is counted.</summary>
     private sealed class Store : IPostSummaries, IProfiles, IFollowing
     {
@@ -52,10 +54,10 @@ public class ReadFeedTests
         var (store, timelines) = (new Store(), new InMemoryTimelines());
         var posts = store.Write(30);
 
-        var page = await new ReadFeedHandler(timelines, store, store, store).Handle(new ReadFeed(Reader, 20), Ct);
+        var page = await new ReadFeedHandler(timelines, store, store, store, Cursors).Handle(new ReadFeed(Reader, 20), Ct);
 
         Assert.Equal(posts.AsEnumerable().Reverse().Take(20), page.Value.Items.Select(i => i.Post.PostId));
-        Assert.True(page.Value.HasMore);
+        Assert.NotNull(page.Value.NextCursor);
         Assert.Equal(1, timelines.Touched);
     }
 
@@ -65,7 +67,7 @@ public class ReadFeedTests
         var (store, timelines) = (new Store(), new InMemoryTimelines());
         store.Write(30);
 
-        await new ReadFeedHandler(timelines, store, store, store).Handle(new ReadFeed(Reader, 20), Ct);
+        await new ReadFeedHandler(timelines, store, store, store, Cursors).Handle(new ReadFeed(Reader, 20), Ct);
 
         Assert.Equal((1, 1), (store.PostCalls, store.ProfileCalls));
     }
@@ -75,7 +77,7 @@ public class ReadFeedTests
     {
         var (store, timelines) = (new Store(), new InMemoryTimelines());
         var posts = store.Write(100);
-        var handler = new ReadFeedHandler(timelines, store, store, store);
+        var handler = new ReadFeedHandler(timelines, store, store, store, Cursors);
         await handler.Handle(new ReadFeed(Reader, 20), Ct); // builds the timeline
         // The newest 70 are deleted after the build; their ids are still in the timeline.
         foreach (var post in posts.Skip(30))

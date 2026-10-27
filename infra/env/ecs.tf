@@ -11,7 +11,10 @@ locals {
     name      = "ConnectionStrings__${title(key)}"
     valueFrom = aws_secretsmanager_secret.connection[key].arn
     }],
-    [{ name = "ConnectionStrings__Valkey", valueFrom = aws_secretsmanager_secret.valkey.arn }],
+    [
+      { name = "ConnectionStrings__Valkey", valueFrom = aws_secretsmanager_secret.valkey.arn },
+      { name = "Timeline__Cursor__Keys__Current", valueFrom = aws_secretsmanager_secret.cursor_key.arn },
+    ],
   )
   owner_secret = { name = "ConnectionStrings__Owner", valueFrom = aws_secretsmanager_secret.connection["owner"].arn }
 
