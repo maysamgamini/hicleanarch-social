@@ -20,6 +20,8 @@ using Social.BuildingBlocks.Infrastructure.Valkey;
 
 using Microsoft.EntityFrameworkCore;
 
+using StackExchange.Redis;
+
 using Timeline.Application;
 using Timeline.Domain;
 using Timeline.Infrastructure.Persistence;
@@ -66,12 +68,19 @@ public static class TimelineModule
         services.AddEventHandler<FollowStarted, TimelineUpkeep>(ModuleName.Value);
         // Hybrid fanout: the registry of pulled authors follows the counts Relationships announces.
         services.AddEventHandler<FollowerCountChanged, RegistryOnFollowerCount>(ModuleName.Value);
+        // A deleted or edited post leaves the cache, and a deleted one the timelines (s3-l09).
+        services.AddEventHandler<PostEdited, PostCacheEviction>(ModuleName.Value);
+        services.AddEventHandler<PostDeleted, PostCacheEviction>(ModuleName.Value);
         services.AddSingleton(new PullOptions(configuration.GetValue("Timeline:Pull:Budget", PullRules.Budget)));
         return services
             .AddTimelineApplication()
             .AddSingleton<ITimelines, ValkeyTimelines>()
             .AddScoped<IFollowerPages, InProcessFollowerPages>()
-            .AddScoped<IPostSummaries, InProcessPostSummaries>()
+            // Posts' answer behind the 60-second post summary cache in the short-lived store (s3-l09).
+            .AddScoped<IPostSummaries>(sp => new CachedPostSummaries(
+                new InProcessPostSummaries(sp.GetRequiredService<IDispatcher>()),
+                sp.GetRequiredKeyedService<IConnectionMultiplexer>(ValkeyRegistration.ShortLived)))
+            .AddSingleton<IReadRepair, BackgroundReadRepair>()
             .AddScoped<IProfiles, InProcessProfiles>()
             .AddScoped<IFollowing, InProcessFollowing>()
             .AddScoped<IHiddenAuthors, InProcessHiddenAuthors>()

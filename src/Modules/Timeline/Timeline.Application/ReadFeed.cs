@@ -33,7 +33,8 @@ public sealed record FeedPage(IReadOnlyList<FeedItem> Items, string? NextCursor)
 /// </summary>
 public sealed class ReadFeedHandler(
     ITimelines timelines, IPostSummaries posts, IProfiles profiles, IFollowing following, IHiddenAuthors hidden, ISeenPosts seen, FeedCursors cursors,
-    PulledReads? pulls = null, TimelineRebuilder? rebuilder = null, IRebuildJobs? rebuildJobs = null, FirstPageSources? firstPage = null)
+    PulledReads? pulls = null, TimelineRebuilder? rebuilder = null, IRebuildJobs? rebuildJobs = null, FirstPageSources? firstPage = null,
+    IReadRepair? repair = null)
     : IQueryHandler<ReadFeed, FeedPage>
 {
     public const int DefaultLimit = 20;
@@ -92,7 +93,7 @@ public sealed class ReadFeedHandler(
             var entries = await timelines.Read(reader, after?.Score, read, want, cancellationToken);
             read += entries.Count;
             exhausted = entries.Count < want;
-            items.AddRange((await Hydrate([.. entries.Where(e => After(e, after))], cancellationToken)).Where(filter.Shows));
+            items.AddRange((await Hydrate(reader, [.. entries.Where(e => After(e, after))], cancellationToken)).Where(filter.Shows));
         }
 
         // The pulled side, after the timeline: the two share this request's module reads, one at a time.
@@ -173,8 +174,11 @@ public sealed class ReadFeedHandler(
         await timelines.Fill(reader, [.. recent.OrderByDescending(p => TimelineRules.Score(p.PostId)).Take(TimelineRules.MaxEntries).Select(p => p.PostId)], cancellationToken);
     }
 
-    /// <summary>Two batched reads for any number of entries: the posts, then their authors.</summary>
-    private async Task<IEnumerable<FeedItem>> Hydrate(IReadOnlyList<Entry> entries, CancellationToken cancellationToken)
+    /// <summary>
+    /// Two batched reads for any number of entries: the posts, then their authors. An entry whose post
+    /// Posts no longer has (deleted) is dropped here, and read repair takes it out of this timeline.
+    /// </summary>
+    private async Task<IEnumerable<FeedItem>> Hydrate(Guid reader, IReadOnlyList<Entry> entries, CancellationToken cancellationToken)
     {
         if (entries.Count == 0)
         {
@@ -182,6 +186,12 @@ public sealed class ReadFeedHandler(
         }
 
         var found = (await posts.Get([.. entries.Select(e => e.PostId)], cancellationToken)).ToDictionary(p => p.PostId);
+        var gone = entries.Where(e => !found.ContainsKey(e.PostId)).Select(e => e.PostId).ToList();
+        if (gone.Count > 0)
+        {
+            repair?.Remove(reader, gone);
+        }
+
         var authors = (await profiles.Get([.. found.Values.Select(p => p.AuthorId).Distinct()], cancellationToken)).ToDictionary(a => a.AccountId);
         return entries
             .Where(e => found.ContainsKey(e.PostId) && authors.ContainsKey(found[e.PostId].AuthorId))

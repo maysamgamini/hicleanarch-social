@@ -31,7 +31,7 @@ public class FanOutTests
 
         public Guid Holder { get; private set; }
 
-        public Task Create(Guid postId, Guid authorId, long audience, FanoutPool pool, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task Create(Guid postId, Guid authorId, long audience, FanoutPool pool, CancellationToken cancellationToken, FanoutKind kind = FanoutKind.Add) => Task.CompletedTask;
 
         public Task<FanoutJob?> Claim(FanoutPool pool, TimeSpan lease, CancellationToken cancellationToken)
         {

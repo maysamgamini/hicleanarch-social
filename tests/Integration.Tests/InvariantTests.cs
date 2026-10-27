@@ -72,6 +72,7 @@ public sealed class InvariantTests(Postgres postgres) : IntegrationTest(postgres
         await people.As(gone).PostAsync("/v1/me/deactivate", null, Ct);
         await people.Unfollow(reader, unfollowed);
         await people.As(deleter).DeleteAsync($"/v1/posts/{posts[deleter]}", Ct);
+        await Delivered(); // the post summary cache lets a deleted post go once PostDeleted is handled (s3-l09)
         // Whatever the upkeep removed, every id is back in the timeline: only the read filter stands between them and the page.
         foreach (var post in posts.Values)
         {

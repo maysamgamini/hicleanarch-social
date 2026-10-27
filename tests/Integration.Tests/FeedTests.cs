@@ -66,6 +66,7 @@ public sealed class FeedTests(Postgres postgres) : IntegrationTest(postgres)
         await Feed(people.As(reader));
 
         await people.As(ada).PatchAsJsonAsync($"/v1/posts/{post}", new { text = "The first" }, Ct);
+        await Delivered(); // PostEdited evicts the post summary cache (s3-l09)
         var page = await Feed(people.As(reader));
 
         Assert.Equal("The first", page.GetProperty("items")[0].GetProperty("text").GetString());
@@ -85,6 +86,8 @@ public sealed class FeedTests(Postgres postgres) : IntegrationTest(postgres)
         {
             await people.As(ada).DeleteAsync($"/v1/posts/{post}", Ct);
         }
+
+        await Delivered(); // PostDeleted evicts the post summary cache (s3-l09)
 
         var page = await Feed(people.As(reader));
 

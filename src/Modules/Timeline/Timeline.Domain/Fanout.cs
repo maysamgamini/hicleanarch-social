@@ -10,6 +10,13 @@ public enum FanoutPool
     Large,
 }
 
+/// <summary>What a fanout job writes: a post into the timelines, or (after PostDeleted) its removal from them.</summary>
+public enum FanoutKind
+{
+    Add,
+    Remove,
+}
+
 public static class FanoutPools
 {
     /// <summary>An audience of 1,000 followers or more (one page or more) goes to the large pool.</summary>

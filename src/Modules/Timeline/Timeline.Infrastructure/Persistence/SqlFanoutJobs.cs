@@ -12,26 +12,29 @@ namespace Timeline.Infrastructure.Persistence;
 /// </summary>
 internal sealed class SqlFanoutJobs(TimelineDbContext db) : IFanoutJobs
 {
-    public Task Create(Guid postId, Guid authorId, long audience, FanoutPool pool, CancellationToken cancellationToken) =>
+    public Task Create(Guid postId, Guid authorId, long audience, FanoutPool pool, CancellationToken cancellationToken, FanoutKind kind = FanoutKind.Add) =>
         db.Execute("""
-            INSERT INTO timeline.fanout_jobs (post_id, author_id, audience, pool, status, author_done, followers_reached, attempts, created_at)
-            VALUES (@post, @author, @audience, @pool, 'WAITING', false, 0, 0, now())
-            ON CONFLICT (post_id) DO NOTHING
-            """, cancellationToken, ("post", postId), ("author", authorId), ("audience", audience), ("pool", pool.ToString()));
+            INSERT INTO timeline.fanout_jobs (post_id, kind, author_id, audience, pool, status, author_done, followers_reached, attempts, created_at)
+            VALUES (@post, @kind, @author, @audience, @pool, 'WAITING', false, 0, 0, now())
+            ON CONFLICT (post_id, kind) DO NOTHING
+            """, cancellationToken, ("post", postId), ("kind", Kind(kind)), ("author", authorId), ("audience", audience), ("pool", pool.ToString()));
+
+    private static string Kind(FanoutKind kind) => kind == FanoutKind.Add ? "ADD" : "REMOVE";
 
     public async Task<FanoutJob?> Claim(FanoutPool pool, TimeSpan lease, CancellationToken cancellationToken)
     {
         var token = Guid.NewGuid();
         var claimed = await db.Read("""
             UPDATE timeline.fanout_jobs SET status = 'RUNNING', lease_token = @token, lease_until = now() + @lease, attempts = attempts + 1
-            WHERE post_id = (
-                SELECT post_id FROM timeline.fanout_jobs
+            WHERE (post_id, kind) = (
+                SELECT post_id, kind FROM timeline.fanout_jobs
                 WHERE pool = @pool AND status <> 'DONE' AND (lease_until IS NULL OR lease_until < now())
                 ORDER BY created_at LIMIT 1
                 FOR UPDATE SKIP LOCKED)
-            RETURNING post_id, author_id, cursor, author_done, followers_reached
+            RETURNING post_id, author_id, cursor, author_done, followers_reached, kind
             """,
-            r => new FanoutJob(r.GetGuid(0), r.GetGuid(1), pool, r.IsDBNull(2) ? null : r.GetGuid(2), r.GetBoolean(3), r.GetInt64(4), token),
+            r => new FanoutJob(r.GetGuid(0), r.GetGuid(1), pool, r.IsDBNull(2) ? null : r.GetGuid(2), r.GetBoolean(3), r.GetInt64(4), token,
+                r.GetString(5) == "ADD" ? FanoutKind.Add : FanoutKind.Remove),
             cancellationToken, ("token", token), ("lease", lease), ("pool", pool.ToString()));
         return claimed.SingleOrDefault();
     }

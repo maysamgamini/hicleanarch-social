@@ -24,7 +24,9 @@ internal sealed class TimelineDbContext(DbContextOptions<TimelineDbContext> opti
         modelBuilder.Entity<FanoutJobRow>(job =>
         {
             job.ToTable("fanout_jobs");
-            job.HasKey(j => j.PostId);
+            // A post has at most two jobs: its fanout, and after PostDeleted its removal (s3-l09).
+            job.HasKey(j => new { j.PostId, j.Kind });
+            job.Property(j => j.Kind).HasMaxLength(10).HasDefaultValue("ADD");
             job.Property(j => j.Pool).HasMaxLength(10);
             job.Property(j => j.Status).HasMaxLength(10);
             // What a worker of a pool looks for: the oldest job not done.
@@ -70,6 +72,9 @@ internal sealed class FanoutProgressRow
 internal sealed class FanoutJobRow
 {
     public Guid PostId { get; set; }
+
+    /// <summary>ADD (the post's fanout) or REMOVE (its removal after PostDeleted).</summary>
+    public string Kind { get; set; } = "ADD";
 
     public Guid AuthorId { get; set; }
 

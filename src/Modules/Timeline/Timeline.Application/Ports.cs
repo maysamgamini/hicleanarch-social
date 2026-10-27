@@ -40,6 +40,10 @@ public interface ITimelines
 
     /// <summary>Removes these posts from the owner's timeline, if they are there.</summary>
     Task Remove(Guid owner, IReadOnlyList<Guid> postIds, CancellationToken cancellationToken);
+
+    /// <summary>Removes the post from each of these timelines, if it is there: a page of a deleted post's removal.</summary>
+    Task RemoveFrom(IReadOnlyList<Guid> owners, Guid postId, CancellationToken cancellationToken) =>
+        Task.WhenAll(owners.Select(owner => Remove(owner, [postId], cancellationToken)));
 }
 
 /// <summary>An author's audience, a page at a time, in follower-id order.</summary>

@@ -130,4 +130,19 @@ internal sealed class ValkeyTimelines(IConnectionMultiplexer valkey, FanoutPace 
                 [.. postIds.SelectMany(p => new RedisValue[] { TimelineRules.MemberBytes(p), TimelineRules.Member(p) })]).WaitAsync(cancellationToken);
         }
     }
+
+    public async Task RemoveFrom(IReadOnlyList<Guid> owners, Guid postId, CancellationToken cancellationToken)
+    {
+        if (owners.Count == 0)
+        {
+            return;
+        }
+
+        // One round trip for the page, as an add's page is; both member forms.
+        RedisValue[] members = [TimelineRules.MemberBytes(postId), TimelineRules.Member(postId)];
+        var batch = valkey.GetDatabase().CreateBatch();
+        var removals = owners.Select(owner => batch.SortedSetRemoveAsync(Key(owner), members)).ToList();
+        batch.Execute();
+        await Task.WhenAll(removals).WaitAsync(cancellationToken);
+    }
 }

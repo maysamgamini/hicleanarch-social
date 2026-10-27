@@ -26,9 +26,15 @@ namespace Timeline.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("Timeline.Infrastructure.Persistence.FanoutJobRow", b =>
                 {
                     b.Property<Guid>("PostId")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("post_id");
+
+                    b.Property<string>("Kind")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasDefaultValue("ADD")
+                        .HasColumnName("kind");
 
                     b.Property<int>("Attempts")
                         .HasColumnType("integer")
@@ -78,7 +84,7 @@ namespace Timeline.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(10)")
                         .HasColumnName("status");
 
-                    b.HasKey("PostId")
+                    b.HasKey("PostId", "Kind")
                         .HasName("pk_fanout_jobs");
 
                     b.HasIndex("Pool", "CreatedAt")

@@ -11,7 +11,7 @@ namespace Timeline.Application;
 public sealed record StartFanout(Guid PostId, Guid AuthorId, DateTimeOffset StoredAt) : ICommand<FanoutPool?>;
 
 /// <summary>A fanout job as a worker holds it: where it stands, and the lease that makes it this worker's.</summary>
-public sealed record FanoutJob(Guid PostId, Guid AuthorId, FanoutPool Pool, Guid? Cursor, bool AuthorDone, long Reached, Guid LeaseToken);
+public sealed record FanoutJob(Guid PostId, Guid AuthorId, FanoutPool Pool, Guid? Cursor, bool AuthorDone, long Reached, Guid LeaseToken, FanoutKind Kind = FanoutKind.Add);
 
 /// <summary>
 /// The durable fanout jobs, in Timeline's own schema. A job is claimed with a lease; every step moves
@@ -20,8 +20,8 @@ public sealed record FanoutJob(Guid PostId, Guid AuthorId, FanoutPool Pool, Guid
 /// </summary>
 public interface IFanoutJobs
 {
-    /// <summary>Creates the job, unless the post already has one (a redelivered PostPublished).</summary>
-    Task Create(Guid postId, Guid authorId, long audience, FanoutPool pool, CancellationToken cancellationToken);
+    /// <summary>Creates the job, unless the post already has one of this kind (a redelivered event).</summary>
+    Task Create(Guid postId, Guid authorId, long audience, FanoutPool pool, CancellationToken cancellationToken, FanoutKind kind = FanoutKind.Add);
 
     /// <summary>The oldest job of the pool that nobody holds, now held by the caller for <paramref name="lease"/>.</summary>
     Task<FanoutJob?> Claim(FanoutPool pool, TimeSpan lease, CancellationToken cancellationToken);
@@ -98,7 +98,7 @@ public sealed class FanoutRunner(IFanoutJobs jobs, ITimelines timelines, IFollow
         if (!job.AuthorDone)
         {
             // The author reads their own post in their own feed.
-            await timelines.AddToExisting([job.AuthorId], job.PostId, cancellationToken);
+            await Write(job, [job.AuthorId], cancellationToken);
             job = job with { AuthorDone = true };
             if (!await jobs.Advance(job, lease, cancellationToken))
             {
@@ -110,12 +110,12 @@ public sealed class FanoutRunner(IFanoutJobs jobs, ITimelines timelines, IFollow
         {
             var (page, next) = await followers.Page(job.AuthorId, job.Cursor, FanoutPools.PageSize, cancellationToken);
             await pace.WaitTurn(job.Pool, cancellationToken);
-            await timelines.AddToExisting(page, job.PostId, cancellationToken);
+            await Write(job, page, cancellationToken);
             job = job with { Cursor = next ?? (page.Count > 0 ? page[^1] : job.Cursor), Reached = job.Reached + page.Count };
             holding?.Invoke(job);
             if (next is null)
             {
-                if (await jobs.Finish(job, cancellationToken))
+                if (await jobs.Finish(job, cancellationToken) && job.Kind == FanoutKind.Add)
                 {
                     // Fanned out: the last existing follower timeline has the post.
                     await progress.Reached(job.PostId, job.Reached, cancellationToken);
@@ -130,9 +130,16 @@ public sealed class FanoutRunner(IFanoutJobs jobs, ITimelines timelines, IFollow
                 return true; // the lease ran out; the job is another worker's now
             }
 
-            await progress.Reached(job.PostId, job.Reached, cancellationToken);
+            if (job.Kind == FanoutKind.Add)
+            {
+                await progress.Reached(job.PostId, job.Reached, cancellationToken);
+            }
         }
     }
+
+    private Task Write(FanoutJob job, IReadOnlyList<Guid> owners, CancellationToken cancellationToken) => job.Kind == FanoutKind.Add
+        ? timelines.AddToExisting(owners, job.PostId, cancellationToken)
+        : timelines.RemoveFrom(owners, job.PostId, cancellationToken);
 }
 
 public static class TimelineApplication
@@ -147,6 +154,7 @@ public static class TimelineApplication
             .AddScoped<IQueryHandler<GetDelivery, Delivery>, GetDeliveryHandler>()
             .AddHybridFanout()
             .AddScoped<TimelineRebuilder>()
+            .AddScoped<ICommandHandler<RemoveDeletedPost, bool>, RemoveDeletedPostHandler>()
             .AddScoped<FirstPageSources>()
             .AddScoped<ICommandHandler<RunRebuild, bool>, RunRebuildHandler>();
 }
