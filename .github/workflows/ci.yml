@@ -1,0 +1,38 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+    tags: ["s*-l*"]
+  pull_request:
+
+# Read the code, nothing else: the default token may be read-write.
+permissions:
+  contents: read
+
+jobs:
+  dotnet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          global-json-file: global.json
+      - run: dotnet build Social.slnx
+      - run: dotnet test Social.slnx --no-build
+
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+      - name: fmt, validate and test every root, offline
+        run: |
+          terraform fmt -check -recursive infra
+          for dir in infra/bootstrap infra/env; do
+            if ls "$dir"/*.tf >/dev/null 2>&1; then
+              terraform -chdir="$dir" init -backend=false -input=false
+              terraform -chdir="$dir" validate
+              terraform -chdir="$dir" test
+            fi
+          done

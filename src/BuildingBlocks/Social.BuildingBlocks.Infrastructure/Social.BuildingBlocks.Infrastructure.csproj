@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="StackExchange.Redis" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Social.BuildingBlocks.Application\Social.BuildingBlocks.Application.csproj" />
+    <ProjectReference Include="..\Social.BuildingBlocks.Domain\Social.BuildingBlocks.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

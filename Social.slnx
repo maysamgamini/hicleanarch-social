@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/" />
+  <Folder Name="/src/BuildingBlocks/">
+    <Project Path="src/BuildingBlocks/Social.BuildingBlocks.Application/Social.BuildingBlocks.Application.csproj" />
+    <Project Path="src/BuildingBlocks/Social.BuildingBlocks.Domain/Social.BuildingBlocks.Domain.csproj" />
+    <Project Path="src/BuildingBlocks/Social.BuildingBlocks.Infrastructure/Social.BuildingBlocks.Infrastructure.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,67 @@
+using Social.BuildingBlocks.Application;
+
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+
+namespace Social.BuildingBlocks.Infrastructure.Events;
+
+/// <summary>
+/// The events one module's context added in this scope, handed to the bus once that context's
+/// transaction commits. One per context, so one module's commit or rollback never touches another's.
+/// </summary>
+public sealed class PendingEvents<TContext>
+    where TContext : DbContext
+{
+    public List<OutboxRecord> Records { get; } = [];
+}
+
+internal sealed class EfOutbox<TContext>(TContext db, PendingEvents<TContext> pending, string module) : IOutbox
+    where TContext : DbContext
+{
+    public Task Add(IntegrationEvent integrationEvent, CancellationToken cancellationToken) =>
+        AddRange([integrationEvent], cancellationToken);
+
+    public async Task AddRange(IReadOnlyCollection<IntegrationEvent> integrationEvents, CancellationToken cancellationToken)
+    {
+        if (db.Database.CurrentTransaction is null)
+        {
+            throw new InvalidOperationException("An event is written in the transaction of the change it reports; start one first.");
+        }
+
+        var messages = integrationEvents.Select(EventBus.ToMessage).ToList();
+        db.AddRange(messages);
+        await db.SaveChangesAsync(cancellationToken); // one SaveChanges: EF Core sends the rows in batched commands
+        pending.Records.AddRange(messages.Select(m => new OutboxRecord(module, m.Id, m.Type, m.Payload, m.TraceParent)));
+    }
+}
+
+/// <summary>Right after the commit, the events of the transaction go to the bus; after a rollback, nowhere.</summary>
+public sealed class OutboxCommitInterceptor<TContext>(PendingEvents<TContext> pending, EventBus bus) : DbTransactionInterceptor
+    where TContext : DbContext
+{
+    public override Task TransactionCommittedAsync(System.Data.Common.DbTransaction transaction, TransactionEndEventData eventData, CancellationToken cancellationToken = default)
+    {
+        Flush();
+        return Task.CompletedTask;
+    }
+
+    public override void TransactionCommitted(System.Data.Common.DbTransaction transaction, TransactionEndEventData eventData) => Flush();
+
+    public override Task TransactionRolledBackAsync(System.Data.Common.DbTransaction transaction, TransactionEndEventData eventData, CancellationToken cancellationToken = default)
+    {
+        pending.Records.Clear();
+        return Task.CompletedTask;
+    }
+
+    public override void TransactionRolledBack(System.Data.Common.DbTransaction transaction, TransactionEndEventData eventData) => pending.Records.Clear();
+
+    private void Flush()
+    {
+        foreach (var record in pending.Records)
+        {
+            bus.Publish(record);
+        }
+
+        pending.Records.Clear();
+    }
+}
