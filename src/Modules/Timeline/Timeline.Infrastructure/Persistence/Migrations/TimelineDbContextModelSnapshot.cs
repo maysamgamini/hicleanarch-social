@@ -120,6 +120,30 @@ namespace Timeline.Infrastructure.Persistence.Migrations
 
                     b.ToTable("fanout_progress", "timeline");
                 });
+
+            modelBuilder.Entity("Timeline.Infrastructure.Persistence.RebuildJobRow", b =>
+                {
+                    b.Property<Guid>("ReaderId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("reader_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset?>("LeaseUntil")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lease_until");
+
+                    b.HasKey("ReaderId")
+                        .HasName("pk_rebuild_jobs");
+
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("rebuild_jobs_oldest");
+
+                    b.ToTable("rebuild_jobs", "timeline");
+                });
 #pragma warning restore 612, 618
         }
     }

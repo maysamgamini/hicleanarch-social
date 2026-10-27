@@ -64,7 +64,8 @@ public sealed class InvariantTests(Postgres postgres) : IntegrationTest(postgres
             posts[author] = await people.Post(author, "post");
         }
 
-        await Page(people.As(reader)); // builds the reader's timeline with all seven
+        await Page(people.As(reader));
+        await TimelineBuilt(reader); // the reader's timeline, with all seven
         await people.As(reader).PutAsync($"/v1/accounts/{blocked}/block", null, Ct);
         await people.As(blocking).PutAsync($"/v1/accounts/{reader}/block", null, Ct);
         await people.As(reader).PutAsync($"/v1/accounts/{muted}/mute", null, Ct);
@@ -134,7 +135,8 @@ public sealed class InvariantTests(Postgres postgres) : IntegrationTest(postgres
             var ada = await people.SignUp();
             fan = await people.SignUp();
             await people.Follow(fan, ada);
-            await Page(people.As(fan)); // the fan's timeline exists
+            await Page(people.As(fan));
+            await TimelineBuilt(fan); // the fan's timeline exists
             // The follow's backfill is done first: only the post's own fanout can bring the post now.
             await Delivered();
             post = await people.Post(ada, "stored, then the program stops");

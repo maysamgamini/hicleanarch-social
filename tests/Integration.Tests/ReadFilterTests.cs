@@ -34,6 +34,7 @@ public sealed class ReadFilterTests(Postgres postgres) : IntegrationTest(postgre
         await _people.Follow(bob, ada);
         await Page(ada);
         await Page(bob);
+        await TimelineBuilt(ada, bob);
         var byAda = await _people.Post(ada, "from ada");
         var byBob = await _people.Post(bob, "from bob");
         await Eventually(async () => await _timelines.Holds(ada, byBob) && await _timelines.Holds(bob, byAda));
@@ -82,6 +83,8 @@ public sealed class ReadFilterTests(Postgres postgres) : IntegrationTest(postgre
         await _people.Follow(reader, ada);
         var post = await _people.Post(ada, "cleaned up");
         await Page(reader);
+        await TimelineBuilt(reader);
+        Assert.True(await _timelines.Holds(reader, post));
 
         await _people.Unfollow(reader, ada);
 
@@ -92,7 +95,8 @@ public sealed class ReadFilterTests(Postgres postgres) : IntegrationTest(postgre
     public async Task A_new_follow_shows_the_followees_recent_posts()
     {
         var (reader, ada) = (await _people.SignUp(), await _people.SignUp());
-        await Page(reader); // the reader's timeline exists, empty
+        await Page(reader);
+        await TimelineBuilt(reader); // the reader's timeline exists, empty
         var posts = new List<Guid>();
         for (var i = 0; i < 3; i++)
         {

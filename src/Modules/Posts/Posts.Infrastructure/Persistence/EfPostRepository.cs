@@ -14,7 +14,21 @@ internal sealed class EfPostRepository(PostsDbContext db) : IPostRepository
     {
         db.Posts.Add(post);
         await db.SaveChangesAsync(cancellationToken);
+        // In the post's transaction: the author's own row, so never a hot one for anyone else.
+        await db.Execute("""
+            INSERT INTO posts.author_activity (author_id, last_posted_at) VALUES (@author, @at)
+            ON CONFLICT (author_id) DO UPDATE SET last_posted_at = GREATEST(posts.author_activity.last_posted_at, excluded.last_posted_at)
+            """, cancellationToken, ("author", post.AuthorId), ("at", post.CreatedAt));
     }
+
+    public async Task<IReadOnlyList<AuthorActivity>> MostRecentlyActive(IReadOnlyCollection<Guid> authors, int limit, CancellationToken cancellationToken) =>
+        authors.Count == 0
+            ? []
+            : await db.Read("""
+                SELECT author_id, last_posted_at FROM posts.author_activity
+                WHERE author_id = ANY(@authors) ORDER BY last_posted_at DESC, author_id LIMIT @limit
+                """, r => new AuthorActivity(r.GetGuid(0), r.GetFieldValue<DateTimeOffset>(1)),
+                cancellationToken, ("authors", authors.ToArray()), ("limit", limit));
 
     public Task<Post?> Find(Guid id, CancellationToken cancellationToken) =>
         db.Posts.SingleOrDefaultAsync(p => p.Id == id, cancellationToken);

@@ -33,7 +33,22 @@ internal sealed class PostsDbContext(DbContextOptions<PostsDbContext> options) :
             // "An author's newest posts": a timeline's build reads it for every followed account.
             post.HasIndex(p => new { p.AuthorId, p.Id }).IsDescending(false, true).HasDatabaseName("posts_by_author");
         });
+
+        // Each author's last post time, one row per author: which followed accounts posted most recently
+        // is a read of a few thousand primary keys, not of their posts.
+        modelBuilder.Entity<AuthorActivityRow>(activity =>
+        {
+            activity.ToTable("author_activity");
+            activity.HasKey(a => a.AuthorId);
+        });
     }
+}
+
+internal sealed class AuthorActivityRow
+{
+    public Guid AuthorId { get; set; }
+
+    public DateTimeOffset LastPostedAt { get; set; }
 }
 
 internal static class PostsDbOptions

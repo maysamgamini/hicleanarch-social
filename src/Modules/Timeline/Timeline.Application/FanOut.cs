@@ -145,5 +145,8 @@ public static class TimelineApplication
             .AddScoped<ICommandHandler<RemoveAuthor, int>, RemoveAuthorHandler>()
             .AddScoped<ICommandHandler<AddRecentPosts, int>, AddRecentPostsHandler>()
             .AddScoped<IQueryHandler<GetDelivery, Delivery>, GetDeliveryHandler>()
-            .AddHybridFanout();
+            .AddHybridFanout()
+            .AddScoped<TimelineRebuilder>()
+            .AddScoped<FirstPageSources>()
+            .AddScoped<ICommandHandler<RunRebuild, bool>, RunRebuildHandler>();
 }

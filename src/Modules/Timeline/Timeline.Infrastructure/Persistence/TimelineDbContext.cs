@@ -30,7 +30,24 @@ internal sealed class TimelineDbContext(DbContextOptions<TimelineDbContext> opti
             // What a worker of a pool looks for: the oldest job not done.
             job.HasIndex(j => new { j.Pool, j.CreatedAt }).HasFilter("status <> 'DONE'").HasDatabaseName("fanout_jobs_waiting");
         });
+
+        modelBuilder.Entity<RebuildJobRow>(job =>
+        {
+            job.ToTable("rebuild_jobs");
+            job.HasKey(j => j.ReaderId);
+            job.HasIndex(j => j.CreatedAt).HasDatabaseName("rebuild_jobs_oldest");
+        });
     }
+}
+
+/// <summary>A returning reader's timeline to build: one row per reader, so two returns ask once.</summary>
+internal sealed class RebuildJobRow
+{
+    public Guid ReaderId { get; set; }
+
+    public DateTimeOffset CreatedAt { get; set; }
+
+    public DateTimeOffset? LeaseUntil { get; set; }
 }
 
 internal sealed class FanoutProgressRow

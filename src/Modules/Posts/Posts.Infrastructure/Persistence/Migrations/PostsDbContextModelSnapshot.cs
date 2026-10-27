@@ -67,6 +67,23 @@ namespace Posts.Infrastructure.Persistence.Migrations
                     b.ToTable("posts", "posts");
                 });
 
+            modelBuilder.Entity("Posts.Infrastructure.Persistence.AuthorActivityRow", b =>
+                {
+                    b.Property<Guid>("AuthorId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("author_id");
+
+                    b.Property<DateTimeOffset>("LastPostedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_posted_at");
+
+                    b.HasKey("AuthorId")
+                        .HasName("pk_author_activity");
+
+                    b.ToTable("author_activity", "posts");
+                });
+
             modelBuilder.Entity("Social.BuildingBlocks.Infrastructure.Events.InboxMessage", b =>
                 {
                     b.Property<string>("Handler")

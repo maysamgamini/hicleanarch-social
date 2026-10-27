@@ -68,7 +68,8 @@ public sealed class BackpressureTests(Postgres postgres) : IntegrationTest(postg
         var people = new People(host);
         var (reader, author) = (await people.SignUp(), await people.SignUp());
         await people.Follow(reader, author);
-        await people.As(reader).GetAsync("/v1/feed", Ct); // the reader's timeline exists
+        await people.As(reader).GetAsync("/v1/feed", Ct);
+        await TimelineBuilt(reader); // the reader's timeline exists
         var fans = Enumerable.Range(0, 60_000).Select(_ => Guid.NewGuid()).ToArray();
         await Db.Execute("""
             INSERT INTO relationships.follows (follower_id, followee_id) SELECT f, @author FROM unnest(@fans) AS f;

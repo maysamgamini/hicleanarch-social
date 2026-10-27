@@ -40,6 +40,9 @@ public interface IPostRepository
 
     Task<IReadOnlyList<PostSummary>> RecentByAuthors(IReadOnlyCollection<Guid> authors, int perAuthor, CancellationToken cancellationToken);
 
+    /// <summary>Among these authors, the ones that posted most recently, with when, newest first.</summary>
+    Task<IReadOnlyList<AuthorActivity>> MostRecentlyActive(IReadOnlyCollection<Guid> authors, int limit, CancellationToken cancellationToken);
+
     /// <summary>One author's newest active posts, older than <paramref name="before"/> when given: the pulled side of a feed page.</summary>
     Task<IReadOnlyList<PostSummary>> RecentByAuthor(Guid author, Guid? before, int limit, CancellationToken cancellationToken);
 }
@@ -177,6 +180,12 @@ public sealed class GetRecentByAuthorHandler(IPostRepository posts) : IQueryHand
         Result.Success(await posts.RecentByAuthor(query.AuthorId, query.Before, Math.Clamp(query.Limit, 1, 800), cancellationToken));
 }
 
+public sealed class GetRecentlyActiveAuthorsHandler(IPostRepository posts) : IQueryHandler<GetRecentlyActiveAuthors, IReadOnlyList<AuthorActivity>>
+{
+    public async Task<Result<IReadOnlyList<AuthorActivity>>> Handle(GetRecentlyActiveAuthors query, CancellationToken cancellationToken) =>
+        Result.Success(await posts.MostRecentlyActive([.. query.AuthorIds.Distinct()], Math.Clamp(query.Limit, 1, 1_000), cancellationToken));
+}
+
 public static class PostsApplication
 {
     public static IServiceCollection AddPostsApplication(this IServiceCollection services) =>
@@ -187,5 +196,6 @@ public static class PostsApplication
             .AddScoped<IQueryHandler<GetPost, PostView>, GetPostHandler>()
             .AddScoped<IQueryHandler<GetPosts, IReadOnlyList<PostSummary>>, GetPostsHandler>()
             .AddScoped<IQueryHandler<GetRecentByAuthors, IReadOnlyList<PostSummary>>, GetRecentByAuthorsHandler>()
-            .AddScoped<IQueryHandler<GetRecentByAuthor, IReadOnlyList<PostSummary>>, GetRecentByAuthorHandler>();
+            .AddScoped<IQueryHandler<GetRecentByAuthor, IReadOnlyList<PostSummary>>, GetRecentByAuthorHandler>()
+            .AddScoped<IQueryHandler<GetRecentlyActiveAuthors, IReadOnlyList<AuthorActivity>>, GetRecentlyActiveAuthorsHandler>();
 }

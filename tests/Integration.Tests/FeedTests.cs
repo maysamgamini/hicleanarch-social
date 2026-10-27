@@ -78,7 +78,8 @@ public sealed class FeedTests(Postgres postgres) : IntegrationTest(postgres)
         var (reader, ada) = (await people.SignUp(), await people.SignUp());
         await people.Follow(reader, ada);
         var posts = await Write(people, ada, 30);
-        await Feed(people.As(reader)); // builds the timeline with all 30
+        await Feed(people.As(reader));
+        await TimelineBuilt(reader); // the timeline, with all 30
         var deleted = posts.Skip(10).Where((_, i) => i % 2 == 0).ToList();
         foreach (var post in deleted)
         {
@@ -90,7 +91,7 @@ public sealed class FeedTests(Postgres postgres) : IntegrationTest(postgres)
         Assert.Equal(posts.Except(deleted).Reverse(), Ids(page));
     }
 
-    /// <summary>Publishes a post in the middle of a build: after the timeline exists, before the fill reads Posts.</summary>
+    /// <summary>Publishes a post in the middle of a rebuild: after the timeline exists, before the fill reads Posts.</summary>
     private sealed class PublishDuringBuild(IPostSummaries inner, Func<Task> publish) : IPostSummaries
     {
         public Task<IReadOnlyList<PostCard>> Get(IReadOnlyList<Guid> postIds, CancellationToken cancellationToken) => inner.Get(postIds, cancellationToken);
@@ -108,20 +109,27 @@ public sealed class FeedTests(Postgres postgres) : IntegrationTest(postgres)
     public async Task A_post_published_while_a_missing_timeline_is_being_built_is_in_it()
     {
         Guid reader = default, ada = default, late = default;
+        var publishedLate = 0;
         People people = null!;
         var timelines = new Timelines(Db.Valkey);
         var host = StartHost(services => services.AddScoped<IPostSummaries>(sp => new PublishDuringBuild(
             new InProcessPostSummaries(sp.GetRequiredService<IDispatcher>()),
             async () =>
             {
-                late = await people.Post(ada, "Published during the build");
-                await Eventually(() => timelines.Holds(reader, late));
+                // Only the rebuild reads Posts after the timeline exists; page 1 (stage 1) reads before.
+                if (await timelines.Db.KeyExistsAsync(Timelines.Key(reader)) && Interlocked.Exchange(ref publishedLate, 1) == 0)
+                {
+                    late = await people.Post(ada, "Published during the build");
+                    await Eventually(() => timelines.Holds(reader, late));
+                }
             })));
         people = new People(host);
         (reader, ada) = (await people.SignUp(), await people.SignUp());
         await people.Follow(reader, ada);
         var early = await people.Post(ada, "Before the build");
 
+        Assert.Equal([early], Ids(await Feed(people.As(reader)))); // page 1, while the rebuild is asked for
+        await Eventually(async () => late != default && await timelines.Holds(reader, early));
         var page = await Feed(people.As(reader));
 
         Assert.Equal([late, early], Ids(page));
@@ -135,6 +143,7 @@ public sealed class FeedTests(Postgres postgres) : IntegrationTest(postgres)
         var (reader, ada) = (await people.SignUp(), await people.SignUp());
         await people.Follow(reader, ada);
         await Feed(people.As(reader));
+        await TimelineBuilt(reader);
         Assert.InRange((await timelines.Db.KeyTimeToLiveAsync(Timelines.Key(reader)))!.Value, TimeSpan.FromDays(6.9), TimeSpan.FromDays(7));
         await timelines.Db.KeyExpireAsync(Timelines.Key(reader), TimeSpan.FromMinutes(10));
 
@@ -158,6 +167,7 @@ public sealed class FeedTests(Postgres postgres) : IntegrationTest(postgres)
         await Write(people, ada, 3);
 
         await Feed(people.As(reader));
+        await TimelineBuilt(reader);
         // Every fanout and follow backfill has landed, so nothing writes to the timeline after it is emptied.
         // Since s3-l02 a delivered PostPublished is a fanout job, written after it: wait for the jobs too.
         await Eventually(async () => await Db.Scalar<bool>(

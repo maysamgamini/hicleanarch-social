@@ -50,6 +50,7 @@ public static class TimelineModule
         services.AddSingleton<FanoutWorkers>();
         services.AddHostedService(sp => sp.GetRequiredService<FanoutWorkers>());
         services.AddSingleton<IStopParticipant>(sp => sp.GetRequiredService<FanoutWorkers>());
+        services.AddHostedService<RebuildWorkers>();
         services.AddSingleton(new ModuleDatabase("Timeline", TimelineDbContext.Schema, connectionString));
         var keys = configuration.GetSection("Timeline:Cursor:Keys");
         services.AddSingleton(new FeedCursors(new CursorKeys(
@@ -76,6 +77,9 @@ public static class TimelineModule
             .AddScoped<IFanoutProgress, SqlFanoutProgress>()
             .AddScoped<IFanoutJobs, SqlFanoutJobs>()
             .AddScoped<IAudience, InProcessAudience>()
+            .AddScoped<IRebuildJobs, SqlRebuildJobs>()
+            .AddSingleton<IRebuildLock, ValkeyRebuildLock>()
+            .AddScoped<IAuthorActivity, InProcessAuthorActivity>()
             .AddSingleton<ValkeyPulls>()
             .AddSingleton<IPullRegistry>(sp => sp.GetRequiredService<ValkeyPulls>())
             .AddSingleton<IPullLists>(sp => sp.GetRequiredService<ValkeyPulls>())

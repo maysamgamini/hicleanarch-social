@@ -71,6 +71,8 @@ public sealed class CelebrityReadTests(Postgres postgres) : IntegrationTest(post
             await Feed(people.As(reader));
         }
 
+        await TimelineBuilt(readers);
+
         await Task.Delay(TimeSpan.FromSeconds(3), Ct); // the cached posts are past serving (three seconds)
         counts.Calls.Clear();
 

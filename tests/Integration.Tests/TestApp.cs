@@ -104,6 +104,19 @@ public abstract class IntegrationTest(Postgres postgres) : IAsyncLifetime
                AND NOT EXISTS (SELECT 1 FROM posts.outbox WHERE delivered_at IS NULL)
             """));
 
+    /// <summary>
+    /// Waits until the reader's timeline exists: since s3-l07 a reader's first page is served without it
+    /// and a rebuild job builds it just after.
+    /// </summary>
+    protected async Task TimelineBuilt(params Guid[] readers)
+    {
+        await using var timelines = new Timelines(Db.Valkey);
+        foreach (var reader in readers)
+        {
+            await Eventually(() => timelines.Db.KeyExistsAsync(Timelines.Key(reader)));
+        }
+    }
+
     /// <summary>Waits until the counts aggregator has folded the follower ledger (it runs every second).</summary>
     protected Task LedgerFolded() =>
         Eventually(async () => await Db.Scalar<long>("SELECT count(*) FROM relationships.follow_changes") == 0);

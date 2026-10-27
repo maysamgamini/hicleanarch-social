@@ -28,10 +28,12 @@ public sealed record FeedPage(IReadOnlyList<FeedItem> Items, string? NextCursor)
 /// Hybrid fanout: the timeline is merged with the newest posts of the pulled authors the reader
 /// follows, read at read time, deduplicated by post id (a post pushed before its author was promoted
 /// is shown once) and ordered as the timeline orders: by score, then by post id, newest first.
+/// A reader with no timeline (a returning user: it expired) gets page 1 from the 20 followed accounts
+/// that posted most recently, and a rebuild job builds the timeline behind them (s3-l07).
 /// </summary>
 public sealed class ReadFeedHandler(
     ITimelines timelines, IPostSummaries posts, IProfiles profiles, IFollowing following, IHiddenAuthors hidden, ISeenPosts seen, FeedCursors cursors,
-    PulledReads? pulls = null)
+    PulledReads? pulls = null, TimelineRebuilder? rebuilder = null, IRebuildJobs? rebuildJobs = null, FirstPageSources? firstPage = null)
     : IQueryHandler<ReadFeed, FeedPage>
 {
     public const int DefaultLimit = 20;
@@ -61,12 +63,25 @@ public sealed class ReadFeedHandler(
         }
 
         var followed = (await following.Of(reader, cancellationToken)).ToHashSet();
+        var filter = new ReadFilter(reader, followed, (await hidden.Of(reader, cancellationToken)).ToHashSet());
         if (!await timelines.Exists(reader, cancellationToken))
         {
-            await Build(reader, followed, cancellationToken);
+            if (rebuilder is null)
+            {
+                await Build(reader, followed, cancellationToken); // no rebuild jobs here: build on the request
+            }
+            else if (after is null && rebuildJobs is not null && firstPage is not null)
+            {
+                // A returning reader: page 1 now, from the most recently active accounts; the timeline later.
+                var first = await FirstPage(reader, followed, filter, limit, cancellationToken);
+                await rebuildJobs.Request(reader, cancellationToken);
+                return Result.Success(first);
+            }
+            else
+            {
+                await RebuildNow(reader, cancellationToken);
+            }
         }
-
-        var filter = new ReadFilter(reader, followed, (await hidden.Of(reader, cancellationToken)).ToHashSet());
 
         var items = new List<FeedItem>();
         var read = 0;
@@ -94,6 +109,44 @@ public sealed class ReadFeedHandler(
         var more = page.Count > 0 && (merged.Count > limit || !exhausted || pulledFull);
         var next = more ? cursors.Issue(reader, new FeedPosition(TimelineRules.Score(page[^1].Post.PostId), page[^1].Post.PostId)) : null;
         return Result.Success(new FeedPage(page, next));
+    }
+
+    /// <summary>A later page before the rebuild job got to it: rebuild here, or wait for the task that is.</summary>
+    private async Task RebuildNow(Guid reader, CancellationToken cancellationToken)
+    {
+        if (await rebuilder!.Run(reader, cancellationToken))
+        {
+            return;
+        }
+
+        for (var waited = 0; waited < 100 && !await timelines.Exists(reader, cancellationToken); waited++)
+        {
+            await Task.Delay(50, cancellationToken);
+        }
+    }
+
+    /// <summary>Stage 1: page 1 with no timeline, complete down to the line <see cref="FirstPageSources"/> draws.</summary>
+    private async Task<FeedPage> FirstPage(Guid reader, IReadOnlySet<Guid> followed, ReadFilter filter, int limit, CancellationToken cancellationToken)
+    {
+        var want = limit + 5;
+        var (cards, line) = await firstPage!.Read(reader, followed, want, cancellationToken);
+        var authors = cards.Count == 0
+            ? []
+            : (await profiles.Get([.. cards.Select(c => c.AuthorId).Distinct()], cancellationToken)).ToDictionary(a => a.AccountId);
+        var items = cards.Where(c => authors.ContainsKey(c.AuthorId)).Select(c => new FeedItem(c, authors[c.AuthorId])).Where(filter.Shows);
+        var (pulled, pulledFull) = pulls is null ? ([], false) : await PullPage(reader, followed, null, want, cancellationToken);
+        var complete = items.Concat(pulled.Where(filter.Shows)).DistinctBy(i => i.Post.PostId)
+            .Where(i => line is null || TimelineRules.Score(i.Post.PostId) > line)
+            .OrderByDescending(i => TimelineRules.Score(i.Post.PostId))
+            .ThenByDescending(i => TimelineRules.Member(i.Post.PostId), StringComparer.Ordinal)
+            .ToList();
+
+        var page = complete.Take(limit).ToList();
+        await seen.Saw(reader, [.. page.Select(i => i.Post)], cancellationToken);
+        var authorFull = cards.GroupBy(c => c.AuthorId).Any(g => g.Count() >= want);
+        var more = page.Count > 0 && (complete.Count > limit || line is not null || authorFull || pulledFull);
+        var next = more ? cursors.Issue(reader, new FeedPosition(TimelineRules.Score(page[^1].Post.PostId), page[^1].Post.PostId)) : null;
+        return new FeedPage(page, next);
     }
 
     private async Task<(IReadOnlyList<FeedItem> Items, bool Full)> PullPage(Guid reader, IReadOnlySet<Guid> followed, FeedPosition? after, int want, CancellationToken cancellationToken)

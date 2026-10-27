@@ -61,7 +61,8 @@ public sealed class HybridFanoutTests(Postgres postgres) : IntegrationTest(postg
         await people.Follow(fan, star);
         await Delivered(); // the follow's backfill cannot race the posts below
         await Feed(people.As(fan));
-        await Feed(people.As(star)); // both timelines exist
+        await Feed(people.As(star));
+        await TimelineBuilt(fan, star); // both timelines exist
         await Promote(star, ago: PullRules.PushAfterPromotion + TimeSpan.FromMinutes(1));
         await ForgetPullList(fan); // the fan's list, cached before the promotion
 
@@ -83,6 +84,7 @@ public sealed class HybridFanoutTests(Postgres postgres) : IntegrationTest(postg
         await people.Follow(fan, star);
         await Delivered(); // the follow's backfill cannot race the posts below
         await Feed(people.As(fan));
+        await TimelineBuilt(fan);
         await Promote(star, ago: TimeSpan.FromMinutes(5));
         await ForgetPullList(fan); // the fan's list, cached before the promotion
 
@@ -100,6 +102,7 @@ public sealed class HybridFanoutTests(Postgres postgres) : IntegrationTest(postg
         await people.Follow(fan, star);
         await Delivered(); // the follow's backfill cannot race the posts below
         await Feed(people.As(fan));
+        await TimelineBuilt(fan);
         var pushed = await people.Post(star, "Pushed before the promotion");
         await FannedOut(pushed);
         Assert.True(await _timelines.Holds(fan, pushed));
@@ -121,6 +124,7 @@ public sealed class HybridFanoutTests(Postgres postgres) : IntegrationTest(postg
         await people.Follow(fan, star);
         await Delivered(); // the follow's backfill cannot race the posts below
         await Feed(people.As(fan));
+        await TimelineBuilt(fan);
         await Promote(star, ago: TimeSpan.FromDays(1));
         await ForgetPullList(fan); // the fan's list, cached before the promotion
         var whilePulled = await people.Post(star, "While pulled");
@@ -145,6 +149,7 @@ public sealed class HybridFanoutTests(Postgres postgres) : IntegrationTest(postg
         await Delivered(); // the follow's backfill cannot race the posts below
         await people.Follow(fan, friend);
         await Feed(people.As(fan));
+        await TimelineBuilt(fan);
         await Promote(star, ago: TimeSpan.FromHours(1));
         await ForgetPullList(fan); // the fan's list, cached before the promotion
         var written = new List<Guid>();
@@ -202,6 +207,7 @@ public sealed class HybridFanoutTests(Postgres postgres) : IntegrationTest(postg
         await Delivered(); // the follow's backfill cannot race the posts below
         await people.Follow(fan, friend);
         await Feed(people.As(fan));
+        await TimelineBuilt(fan);
         await Promote(star, ago: TimeSpan.FromHours(1));
         await ForgetPullList(fan); // the fan's list, cached before the promotion
         var late = await people.Post(star, "Late");
