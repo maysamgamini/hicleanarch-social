@@ -100,7 +100,7 @@ public sealed class TestDatabase(string owner, string valkey)
     public string Valkey { get; } = valkey;
 
     /// <summary>Every module with a schema, as its connection string name and its role's name prefix.</summary>
-    public static readonly string[] Modules = ["Accounts", "Relationships", "Posts", "Timeline"];
+    public static readonly string[] Modules = ["Accounts", "Relationships", "Posts", "Timeline", "Recommendations"];
 
     public string Owner { get; } = owner;
 

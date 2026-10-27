@@ -21,6 +21,12 @@
     <Project Path="src/Modules/Posts/Posts.Domain/Posts.Domain.csproj" />
     <Project Path="src/Modules/Posts/Posts.Infrastructure/Posts.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/src/Modules/Recommendations/">
+    <Project Path="src/Modules/Recommendations/Recommendations.Application/Recommendations.Application.csproj" />
+    <Project Path="src/Modules/Recommendations/Recommendations.Contracts/Recommendations.Contracts.csproj" />
+    <Project Path="src/Modules/Recommendations/Recommendations.Domain/Recommendations.Domain.csproj" />
+    <Project Path="src/Modules/Recommendations/Recommendations.Infrastructure/Recommendations.Infrastructure.csproj" />
+  </Folder>
   <Folder Name="/src/Modules/Relationships/">
     <Project Path="src/Modules/Relationships/Relationships.Application/Relationships.Application.csproj" />
     <Project Path="src/Modules/Relationships/Relationships.Contracts/Relationships.Contracts.csproj" />
@@ -33,11 +39,16 @@
     <Project Path="src/Modules/Timeline/Timeline.Domain/Timeline.Domain.csproj" />
     <Project Path="src/Modules/Timeline/Timeline.Infrastructure/Timeline.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/graphgen/GraphGen.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Accounts.UnitTests/Accounts.UnitTests.csproj" />
     <Project Path="tests/Architecture.Tests/Architecture.Tests.csproj" />
+    <Project Path="tests/Graph.Tests/Graph.Tests.csproj" />
     <Project Path="tests/Integration.Tests/Integration.Tests.csproj" />
     <Project Path="tests/Posts.UnitTests/Posts.UnitTests.csproj" />
+    <Project Path="tests/Recommendations.UnitTests/Recommendations.UnitTests.csproj" />
     <Project Path="tests/Relationships.UnitTests/Relationships.UnitTests.csproj" />
     <Project Path="tests/Timeline.UnitTests/Timeline.UnitTests.csproj" />
   </Folder>

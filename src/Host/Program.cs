@@ -4,6 +4,8 @@ using Accounts.Infrastructure;
 
 using Posts.Infrastructure;
 
+using Recommendations.Infrastructure;
+
 using Relationships.Infrastructure;
 
 using Social.BuildingBlocks.Application;
@@ -59,6 +61,7 @@ builder.Services.AddAccountsModule(builder.Configuration);
 builder.Services.AddRelationshipsModule(builder.Configuration);
 builder.Services.AddPostsModule(builder.Configuration);
 builder.Services.AddTimelineModule(builder.Configuration);
+builder.Services.AddRecommendationsModule(builder.Configuration);
 
 var app = builder.Build();
 
@@ -83,6 +86,7 @@ app.MapAccountsEndpoints();
 app.MapRelationshipsEndpoints();
 app.MapPostsEndpoints();
 app.MapTimelineEndpoints();
+app.MapRecommendationsEndpoints();
 
 await app.RunAsync();
 
