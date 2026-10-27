@@ -50,9 +50,6 @@ public interface IMediaRepository
     /// no post: one guarded statement per image, so two posts can never take the same one. How many it attached.
     /// </summary>
     Task<int> Attach(IReadOnlyList<Guid> ids, Guid authorId, Guid postId, CancellationToken cancellationToken);
-
-    /// <summary>The object keys of these posts' media, in each post's order.</summary>
-    Task<IReadOnlyDictionary<Guid, IReadOnlyList<string>>> KeysOf(IReadOnlyCollection<Guid> postIds, CancellationToken cancellationToken);
 }
 
 /// <summary>How long an upload URL lives (Media:UploadFor, 5 minutes).</summary>
@@ -108,23 +105,6 @@ public sealed class ConfirmUploadHandler(IMediaRepository media, IMediaStore sto
     }
 }
 
-/// <summary>Puts each post's public media URLs on its summary, with one read for all of them.</summary>
-public sealed class MediaUrls(IMediaRepository media, IMediaStore store)
-{
-    public async Task<IReadOnlyList<PostSummary>> On(IReadOnlyList<PostSummary> posts, CancellationToken cancellationToken)
-    {
-        if (posts.Count == 0)
-        {
-            return posts;
-        }
-
-        var keys = await media.KeysOf([.. posts.Select(p => p.PostId)], cancellationToken);
-        return keys.Count == 0
-            ? posts
-            : [.. posts.Select(p => keys.TryGetValue(p.PostId, out var k) ? p with { Media = [.. k.Select(store.PublicUrl)] } : p)];
-    }
-}
-
 /// <summary>One cleanup pass: unattached uploads older than a day leave the store and the table. How many.</summary>
 public sealed record CleanUpMedia(int Limit = 500) : ICommand<int>;
 
@@ -159,6 +139,5 @@ public static class MediaApplication
         services
             .AddScoped<ICommandHandler<RequestUpload, MediaView>, RequestUploadHandler>()
             .AddScoped<ICommandHandler<ConfirmUpload, MediaView>, ConfirmUploadHandler>()
-            .AddScoped<ICommandHandler<CleanUpMedia, int>, CleanUpMediaHandler>()
-            .AddScoped<MediaUrls>();
+            .AddScoped<ICommandHandler<CleanUpMedia, int>, CleanUpMediaHandler>();
 }

@@ -41,9 +41,13 @@ public static class AccountsModule
         services.AddKeyedScoped<ITransactionScope>(ModuleName.Value, (sp, _) => new ModuleTransaction<AccountsDbContext>(sp.GetRequiredService<AccountsDbContext>()));
         services.AddSingleton<IModuleMigrator, AccountsMigrator>();
         services.AddSingleton(new ModuleDatabase("Accounts", AccountsDbContext.Schema, connectionString));
+        // The read side (s3-l11): the reader endpoint on AWS; here, without ConnectionStrings:AccountsRead
+        // or Database:ReaderHost, the same database in read-only sessions.
+        services.AddReadSide<AccountsDbContext>(ReadSideRegistration.ReaderOf(configuration, "Accounts", connectionString), AccountsDbOptions.Configure);
         return services
             .AddAccountsApplication()
-            .AddScoped<IAccountRepository, EfAccountRepository>();
+            .AddScoped<IAccountRepository, EfAccountRepository>()
+            .AddScoped<IProfileReads, EfProfileReads>();
     }
 
     public static IEndpointRouteBuilder MapAccountsEndpoints(this IEndpointRouteBuilder app)

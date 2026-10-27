@@ -42,12 +42,4 @@ internal sealed class EfMediaRepository(PostsDbContext db) : IMediaRepository
 
         return attached;
     }
-
-    public async Task<IReadOnlyDictionary<Guid, IReadOnlyList<string>>> KeysOf(IReadOnlyCollection<Guid> postIds, CancellationToken cancellationToken)
-    {
-        var rows = await db.Read("""
-            SELECT post_id, owner_id, id FROM posts.media WHERE post_id = ANY(@posts) ORDER BY post_id, position
-            """, r => (Post: r.GetGuid(0), Owner: r.GetGuid(1), Id: r.GetGuid(2)), cancellationToken, ("posts", postIds.ToArray()));
-        return rows.GroupBy(r => r.Post).ToDictionary(g => g.Key, g => (IReadOnlyList<string>)[.. g.Select(r => Media.KeyOf(r.Owner, r.Id))]);
-    }
 }

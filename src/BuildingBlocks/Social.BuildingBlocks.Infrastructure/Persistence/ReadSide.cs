@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 using Npgsql;
@@ -38,6 +39,26 @@ public static class ReadSideRegistration
                 .Options;
             return new ReadOnlyDb<TContext>((TContext)Activator.CreateInstance(typeof(TContext), options)!);
         });
+    }
+
+    /// <summary>
+    /// A module's reader connection: <c>ConnectionStrings:{module}Read</c> when set; otherwise its own
+    /// connection pointed at <c>Database:ReaderHost</c> (Aurora's reader endpoint, the same login and
+    /// password); otherwise its own connection unchanged, read-only all the same.
+    /// </summary>
+    public static string ReaderOf(IConfiguration configuration, string module, string connectionString)
+    {
+        if (configuration.GetConnectionString(module + "Read") is { Length: > 0 } explicitReader)
+        {
+            return explicitReader;
+        }
+
+        if (configuration["Database:ReaderHost"] is not { Length: > 0 } readerHost)
+        {
+            return connectionString;
+        }
+
+        return new NpgsqlConnectionStringBuilder(connectionString) { Host = readerHost }.ConnectionString;
     }
 
     /// <summary>The same connection, with every transaction read-only from its first statement.</summary>

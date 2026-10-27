@@ -35,16 +35,24 @@ public interface IPostRepository
 
     /// <summary>Writes the changes made to posts found in this scope.</summary>
     Task Save(CancellationToken cancellationToken);
+}
 
+/// <summary>
+/// Posts on the read side (s3-l11): the Aurora reader endpoint, a moment behind the writer, for the
+/// feed's hydration and builds. Each summary carries its images' public URLs. The author's own read of
+/// a post right after writing it goes to the writer (<see cref="GetPostHandler"/>).
+/// </summary>
+public interface IPostReads
+{
     Task<IReadOnlyList<PostSummary>> Active(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<PostSummary>> RecentByAuthors(IReadOnlyCollection<Guid> authors, int perAuthor, CancellationToken cancellationToken);
 
-    /// <summary>Among these authors, the ones that posted most recently, with when, newest first.</summary>
-    Task<IReadOnlyList<AuthorActivity>> MostRecentlyActive(IReadOnlyCollection<Guid> authors, int limit, CancellationToken cancellationToken);
-
     /// <summary>One author's newest active posts, older than <paramref name="before"/> when given: the pulled side of a feed page.</summary>
     Task<IReadOnlyList<PostSummary>> RecentByAuthor(Guid author, Guid? before, int limit, CancellationToken cancellationToken);
+
+    /// <summary>Among these authors, the ones that posted most recently, with when, newest first.</summary>
+    Task<IReadOnlyList<AuthorActivity>> MostRecentlyActive(IReadOnlyCollection<Guid> authors, int limit, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -176,25 +184,25 @@ public sealed class GetPostHandler(IPostRepository posts) : IQueryHandler<GetPos
 }
 
 /// <summary>Answers other modules: the feed hydrates a page with one call.</summary>
-public sealed class GetPostsHandler(IPostRepository posts, MediaUrls media) : IQueryHandler<GetPosts, IReadOnlyList<PostSummary>>
+public sealed class GetPostsHandler(IPostReads posts) : IQueryHandler<GetPosts, IReadOnlyList<PostSummary>>
 {
     public async Task<Result<IReadOnlyList<PostSummary>>> Handle(GetPosts query, CancellationToken cancellationToken) =>
-        Result.Success(await media.On(await posts.Active([.. query.PostIds.Distinct()], cancellationToken), cancellationToken));
+        Result.Success(await posts.Active([.. query.PostIds.Distinct()], cancellationToken));
 }
 
-public sealed class GetRecentByAuthorsHandler(IPostRepository posts, MediaUrls media) : IQueryHandler<GetRecentByAuthors, IReadOnlyList<PostSummary>>
+public sealed class GetRecentByAuthorsHandler(IPostReads posts) : IQueryHandler<GetRecentByAuthors, IReadOnlyList<PostSummary>>
 {
     public async Task<Result<IReadOnlyList<PostSummary>>> Handle(GetRecentByAuthors query, CancellationToken cancellationToken) =>
-        Result.Success(await media.On(await posts.RecentByAuthors([.. query.AuthorIds.Distinct()], Math.Clamp(query.PerAuthor, 1, 800), cancellationToken), cancellationToken));
+        Result.Success(await posts.RecentByAuthors([.. query.AuthorIds.Distinct()], Math.Clamp(query.PerAuthor, 1, 800), cancellationToken));
 }
 
-public sealed class GetRecentByAuthorHandler(IPostRepository posts, MediaUrls media) : IQueryHandler<GetRecentByAuthor, IReadOnlyList<PostSummary>>
+public sealed class GetRecentByAuthorHandler(IPostReads posts) : IQueryHandler<GetRecentByAuthor, IReadOnlyList<PostSummary>>
 {
     public async Task<Result<IReadOnlyList<PostSummary>>> Handle(GetRecentByAuthor query, CancellationToken cancellationToken) =>
-        Result.Success(await media.On(await posts.RecentByAuthor(query.AuthorId, query.Before, Math.Clamp(query.Limit, 1, 800), cancellationToken), cancellationToken));
+        Result.Success(await posts.RecentByAuthor(query.AuthorId, query.Before, Math.Clamp(query.Limit, 1, 800), cancellationToken));
 }
 
-public sealed class GetRecentlyActiveAuthorsHandler(IPostRepository posts) : IQueryHandler<GetRecentlyActiveAuthors, IReadOnlyList<AuthorActivity>>
+public sealed class GetRecentlyActiveAuthorsHandler(IPostReads posts) : IQueryHandler<GetRecentlyActiveAuthors, IReadOnlyList<AuthorActivity>>
 {
     public async Task<Result<IReadOnlyList<AuthorActivity>>> Handle(GetRecentlyActiveAuthors query, CancellationToken cancellationToken) =>
         Result.Success(await posts.MostRecentlyActive([.. query.AuthorIds.Distinct()], Math.Clamp(query.Limit, 1, 1_000), cancellationToken));

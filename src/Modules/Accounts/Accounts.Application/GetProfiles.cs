@@ -6,7 +6,7 @@ using Social.BuildingBlocks.Domain;
 
 namespace Accounts.Application;
 
-public sealed class GetProfileByHandleHandler(IAccountRepository accounts) : IQueryHandler<GetProfileByHandle, Profile>
+public sealed class GetProfileByHandleHandler(IProfileReads accounts) : IQueryHandler<GetProfileByHandle, Profile>
 {
     public async Task<Result<Profile>> Handle(GetProfileByHandle query, CancellationToken cancellationToken)
     {
@@ -20,7 +20,7 @@ public sealed class GetProfileByHandleHandler(IAccountRepository accounts) : IQu
 }
 
 /// <summary>One read for any number of ids: the feed hydrates a whole page with it.</summary>
-public sealed class GetProfilesHandler(IAccountRepository accounts) : IQueryHandler<GetProfiles, IReadOnlyList<Profile>>
+public sealed class GetProfilesHandler(IProfileReads accounts) : IQueryHandler<GetProfiles, IReadOnlyList<Profile>>
 {
     public async Task<Result<IReadOnlyList<Profile>>> Handle(GetProfiles query, CancellationToken cancellationToken)
     {

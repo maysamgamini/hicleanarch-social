@@ -31,6 +31,9 @@ public sealed record FeedPage(IReadOnlyList<FeedItem> Items, string? NextCursor)
 /// A reader with no timeline (a returning user: it expired) gets page 1 from the 20 followed accounts
 /// that posted most recently, and a rebuild job builds the timeline behind them (s3-l07).
 /// </summary>
+// Not the read side: a page builds and repairs the reader's timeline and asks for its rebuild job.
+// Its reads of posts and profiles go through Posts' and Accounts' contracts, which read their reader endpoints.
+[ReadsTheWriter]
 public sealed class ReadFeedHandler(
     ITimelines timelines, IPostSummaries posts, IProfiles profiles, IFollowing following, IHiddenAuthors hidden, ISeenPosts seen, FeedCursors cursors,
     PulledReads? pulls = null, TimelineRebuilder? rebuilder = null, IRebuildJobs? rebuildJobs = null, FirstPageSources? firstPage = null,

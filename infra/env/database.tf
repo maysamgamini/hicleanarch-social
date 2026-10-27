@@ -42,5 +42,6 @@ resource "aws_rds_cluster_instance" "writer" {
 }
 
 locals {
-  db_host = aws_rds_cluster.main.endpoint
+  db_host        = aws_rds_cluster.main.endpoint
+  db_reader_host = aws_rds_cluster.main.reader_endpoint
 }

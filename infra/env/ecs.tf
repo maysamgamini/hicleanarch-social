@@ -37,6 +37,8 @@ locals {
       { name = "Graph__Uri", value = local.graph_uri },
       { name = "Graph__Auth", value = "none" },
       { name = "Host__Role", value = "Web" },
+      # Hydration reads Aurora's reader endpoint with each module's own login (s3-l11).
+      { name = "Database__ReaderHost", value = local.db_reader_host },
     ], local.media_environment)
     # SIGTERM, then this many seconds to finish requests, then SIGKILL.
     stopTimeout = 30

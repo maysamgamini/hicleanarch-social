@@ -38,7 +38,10 @@ public sealed record ListedAccount(Guid AccountId, DateTimeOffset Since);
 /// <summary>One page, in account-id order; <paramref name="Next"/> is the last id when more may follow.</summary>
 public sealed record RelationshipPage(IReadOnlyList<ListedAccount> Items, Guid? Next);
 
-/// <summary>Reads that change nothing and take no lock.</summary>
+/// <summary>
+/// Reads that change nothing and take no lock. They read the writer, unlike Posts' and Accounts' read
+/// ports (s3-l11): a block, a mute or an unfollow must hide the author on the very next page.
+/// </summary>
 public interface IRelationshipReads
 {
     Task<RelationshipPage> Followers(Guid account, Guid? after, int limit, CancellationToken cancellationToken);

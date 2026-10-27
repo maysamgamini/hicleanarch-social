@@ -39,6 +39,8 @@ public sealed class FoldFollowerCountsHandler(
 /// <summary>The nightly check: accounts whose counts disagree with their follows. Must be zero.</summary>
 public sealed record CheckCounts : IQuery<long>;
 
+/// <summary>The check compares counts with the truth itself: the writer, never a replica a moment behind.</summary>
+[ReadsTheWriter]
 public sealed class CheckCountsHandler(IFollowerLedger ledger) : IQueryHandler<CheckCounts, long>
 {
     public async Task<Result<long>> Handle(CheckCounts query, CancellationToken cancellationToken) =>

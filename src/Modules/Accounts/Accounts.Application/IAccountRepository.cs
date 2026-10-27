@@ -29,3 +29,14 @@ public interface IAccountRepository
     /// <summary>Stores a changed profile, unless another account holds the new handle.</summary>
     Task<SaveOutcome> Update(Account account, CancellationToken cancellationToken);
 }
+
+/// <summary>
+/// Profiles on the read side (s3-l11): the Aurora reader endpoint, a moment behind the writer. The
+/// feed's hydration and a profile page read here; registering and editing read the writer.
+/// </summary>
+public interface IProfileReads
+{
+    Task<Account?> FindByHandle(Handle handle, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<Account>> FindMany(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken);
+}

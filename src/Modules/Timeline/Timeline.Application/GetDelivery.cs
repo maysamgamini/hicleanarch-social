@@ -9,6 +9,8 @@ namespace Timeline.Application;
 /// </summary>
 public sealed record GetDelivery(Guid PostId, Guid CallerId) : IQuery<Delivery>;
 
+/// <summary>The author asks right after posting: their own write, so the writer.</summary>
+[ReadsTheWriter]
 public sealed class GetDeliveryHandler(IFanoutProgress progress) : IQueryHandler<GetDelivery, Delivery>
 {
     public static readonly Error NotFound = Error.NotFound("post_not_found", "No post of yours has this id.");

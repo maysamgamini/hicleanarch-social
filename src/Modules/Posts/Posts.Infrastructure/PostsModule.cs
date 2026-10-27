@@ -42,7 +42,11 @@ public static class PostsModule
         services.AddSingleton<IModuleMigrator, PostsMigrator>();
         services.AddSingleton(new ModuleDatabase("Posts", PostsDbContext.Schema, connectionString));
         AddMediaStore(services, configuration);
+        // The read side (s3-l11): the reader endpoint on AWS; here, without ConnectionStrings:PostsRead or Database:ReaderHost,
+        // the same database in read-only sessions.
+        services.AddReadSide<PostsDbContext>(ReadSideRegistration.ReaderOf(configuration, "Posts", connectionString), PostsDbOptions.Configure);
         return services
+            .AddScoped<IPostReads, EfPostReads>()
             .AddPostsApplication()
             .AddScoped<IPostRepository, EfPostRepository>()
             .AddScoped<IMediaRepository, EfMediaRepository>()

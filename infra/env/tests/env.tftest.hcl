@@ -320,3 +320,12 @@ run "images_live_in_a_private_bucket_read_only_through_cloudfront" {
     error_message = "On AWS the program uses the S3 store, with public URLs through CloudFront."
   }
 }
+
+run "hydration_reads_the_reader_endpoint" {
+  command = apply
+
+  assert {
+    condition     = strcontains(aws_ecs_task_definition.api.container_definitions, "Database__ReaderHost") && strcontains(aws_ecs_task_definition.worker.container_definitions, "Database__ReaderHost")
+    error_message = "The program gets Aurora's reader endpoint for its read side."
+  }
+}
