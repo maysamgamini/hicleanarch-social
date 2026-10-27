@@ -20,6 +20,7 @@ public class LayerRulesTests
                 "Accounts.Domain", "Accounts.Application", "Accounts.Infrastructure", "Accounts.Contracts",
                 "Relationships.Domain", "Relationships.Application", "Relationships.Infrastructure", "Relationships.Contracts",
                 "Posts.Domain", "Posts.Application", "Posts.Infrastructure", "Posts.Contracts",
+                "Timeline.Domain", "Timeline.Application", "Timeline.Infrastructure", "Timeline.Contracts",
             },
             All.Select(a => a.GetName().Name!).ToHashSet());
 

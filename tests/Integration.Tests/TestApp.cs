@@ -25,6 +25,7 @@ public static class TestApp
                 .ConfigureTestServices(s => services?.Invoke(s))
                 // UseSetting, not ConfigureAppConfiguration: the host reads connection strings while it is built.
                 .UseSetting("ConnectionStrings:Owner", database.Owner)
+                .UseSetting("ConnectionStrings:Valkey", database.Valkey)
                 .UseSetting("Auth:ClientId", ClientId)
                 .UseSetting("Auth:LocalSigningKey", SigningKey);
             foreach (var module in TestDatabase.Modules)

@@ -19,6 +19,7 @@
     <ProjectReference Include="..\Modules\Accounts\Accounts.Infrastructure\Accounts.Infrastructure.csproj" />
     <ProjectReference Include="..\Modules\Relationships\Relationships.Infrastructure\Relationships.Infrastructure.csproj" />
     <ProjectReference Include="..\Modules\Posts\Posts.Infrastructure\Posts.Infrastructure.csproj" />
+    <ProjectReference Include="..\Modules\Timeline\Timeline.Infrastructure\Timeline.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Modules\Timeline\Timeline.Application\Timeline.Application.csproj" />
+  </ItemGroup>
+
+</Project>

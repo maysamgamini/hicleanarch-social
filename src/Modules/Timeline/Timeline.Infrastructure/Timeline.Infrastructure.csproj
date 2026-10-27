@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="StackExchange.Redis" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Timeline.Application\Timeline.Application.csproj" />
+    <ProjectReference Include="..\..\Accounts\Accounts.Contracts\Accounts.Contracts.csproj" />
+    <ProjectReference Include="..\..\Posts\Posts.Contracts\Posts.Contracts.csproj" />
+    <ProjectReference Include="..\..\Relationships\Relationships.Contracts\Relationships.Contracts.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Social.BuildingBlocks.Infrastructure\Social.BuildingBlocks.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

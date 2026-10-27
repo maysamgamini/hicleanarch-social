@@ -13,6 +13,8 @@ using Social.BuildingBlocks.Infrastructure.Identity;
 using Social.BuildingBlocks.Infrastructure.Persistence;
 using Social.Host;
 
+using Timeline.Infrastructure;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // `dotnet run -- token` prints a local token for development: a new user, signed with the local key.
@@ -56,6 +58,7 @@ builder.Services.AddHealth(builder.Configuration);
 builder.Services.AddAccountsModule(builder.Configuration);
 builder.Services.AddRelationshipsModule(builder.Configuration);
 builder.Services.AddPostsModule(builder.Configuration);
+builder.Services.AddTimelineModule(builder.Configuration);
 
 var app = builder.Build();
 
@@ -79,6 +82,7 @@ app.MapHealth();
 app.MapAccountsEndpoints();
 app.MapRelationshipsEndpoints();
 app.MapPostsEndpoints();
+app.MapTimelineEndpoints();
 
 await app.RunAsync();
 

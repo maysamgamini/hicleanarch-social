@@ -1,3 +1,6 @@
+using DotNet.Testcontainers.Builders;
+using DotNet.Testcontainers.Containers;
+
 using Microsoft.Extensions.DependencyInjection;
 
 using Npgsql;
@@ -11,7 +14,7 @@ using Testcontainers.PostgreSql;
 namespace Integration.Tests;
 
 /// <summary>
-/// One real PostgreSQL 17 for the whole run. It is migrated once, into a template database, by the
+/// One real PostgreSQL 17 and one Valkey 8 for the whole run. PostgreSQL It is migrated once, into a template database, by the
 /// same code path as the deploy's migration step; every test then gets a database of its own,
 /// copied from the template, so tests run in parallel without seeing each other's rows or events.
 /// </summary>
@@ -24,14 +27,23 @@ public sealed class Postgres : IAsyncLifetime
         .WithCommand("-c", "max_connections=1000")
         .Build();
 
+    // Valkey as ElastiCache runs it: a plain container, ready when it says so. Tests share it and
+    // never collide, because every key names accounts or posts with fresh ids.
+    private readonly IContainer _valkey = new ContainerBuilder("valkey/valkey:8.1")
+        .WithPortBinding(6379, true)
+        .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged("Ready to accept connections"))
+        .Build();
+
+    public string Valkey => $"{_valkey.Hostname}:{_valkey.GetMappedPublicPort(6379)},abortConnect=false";
+
     // CREATE DATABASE ... TEMPLATE needs the template to have no other session; one copy at a time.
     private readonly SemaphoreSlim _copying = new(1, 1);
 
     public async ValueTask InitializeAsync()
     {
-        await _container.StartAsync();
+        await Task.WhenAll(_container.StartAsync(), _valkey.StartAsync());
         await Execute(_container.GetConnectionString(), $"CREATE DATABASE {Template}");
-        var template = new TestDatabase(At(Template));
+        var template = new TestDatabase(At(Template), Valkey);
         await using (var host = TestApp.Start(template))
         {
             await host.Services.GetRequiredService<DatabaseMigrator>().Run(template.Owner, CancellationToken.None);
@@ -40,7 +52,11 @@ public sealed class Postgres : IAsyncLifetime
         NpgsqlConnection.ClearAllPools();
     }
 
-    public ValueTask DisposeAsync() => _container.DisposeAsync();
+    public async ValueTask DisposeAsync()
+    {
+        await _container.DisposeAsync();
+        await _valkey.DisposeAsync();
+    }
 
     /// <summary>A fresh, migrated database: the module roles, schemas and grants of a deploy, and no rows.</summary>
     public async Task<TestDatabase> NewDatabase()
@@ -58,7 +74,7 @@ public sealed class Postgres : IAsyncLifetime
 
         // TEMPORARY is a right on the database itself, which a copy does not inherit from its template.
         await Execute(_container.GetConnectionString(), $"REVOKE TEMPORARY ON DATABASE {name} FROM PUBLIC");
-        return new TestDatabase(At(name));
+        return new TestDatabase(At(name), Valkey);
     }
 
     private string At(string database) => new NpgsqlConnectionStringBuilder(_container.GetConnectionString())
@@ -78,9 +94,11 @@ public sealed class Postgres : IAsyncLifetime
     }
 }
 
-/// <summary>One test's database: the owner's connection, and each module role's.</summary>
-public sealed class TestDatabase(string owner)
+/// <summary>One test's database: the owner's connection, each module role's, and the shared Valkey.</summary>
+public sealed class TestDatabase(string owner, string valkey)
 {
+    public string Valkey { get; } = valkey;
+
     /// <summary>Every module with a schema, as its connection string name and its role's name prefix.</summary>
     public static readonly string[] Modules = ["Accounts", "Relationships", "Posts"];
 

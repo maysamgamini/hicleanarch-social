@@ -27,11 +27,18 @@
     <Project Path="src/Modules/Relationships/Relationships.Domain/Relationships.Domain.csproj" />
     <Project Path="src/Modules/Relationships/Relationships.Infrastructure/Relationships.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/src/Modules/Timeline/">
+    <Project Path="src/Modules/Timeline/Timeline.Application/Timeline.Application.csproj" />
+    <Project Path="src/Modules/Timeline/Timeline.Contracts/Timeline.Contracts.csproj" />
+    <Project Path="src/Modules/Timeline/Timeline.Domain/Timeline.Domain.csproj" />
+    <Project Path="src/Modules/Timeline/Timeline.Infrastructure/Timeline.Infrastructure.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Accounts.UnitTests/Accounts.UnitTests.csproj" />
     <Project Path="tests/Architecture.Tests/Architecture.Tests.csproj" />
     <Project Path="tests/Integration.Tests/Integration.Tests.csproj" />
     <Project Path="tests/Posts.UnitTests/Posts.UnitTests.csproj" />
     <Project Path="tests/Relationships.UnitTests/Relationships.UnitTests.csproj" />
+    <Project Path="tests/Timeline.UnitTests/Timeline.UnitTests.csproj" />
   </Folder>
 </Solution>

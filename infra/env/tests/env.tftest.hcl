@@ -38,6 +38,12 @@ mock_provider "aws" {
     }
   }
 
+  mock_resource "aws_elasticache_replication_group" {
+    defaults = {
+      primary_endpoint_address = "timelines.mock.cache.amazonaws.com"
+    }
+  }
+
   mock_resource "aws_ecs_cluster" {
     defaults = {
       arn = "arn:aws:ecs:us-east-1:123456789012:cluster/mock"
@@ -92,6 +98,25 @@ run "every_other_resource_can_be_destroyed" {
   assert {
     condition     = aws_lb.api.enable_deletion_protection == false
     error_message = "The load balancer must not refuse a destroy."
+  }
+
+  assert {
+    condition     = aws_secretsmanager_secret.valkey.recovery_window_in_days == 0 && aws_elasticache_replication_group.valkey.engine == "valkey"
+    error_message = "Timelines live in Valkey, and its secret is deleted at once."
+  }
+}
+
+run "valkey_is_reached_from_the_tasks_only_over_tls" {
+  command = apply
+
+  assert {
+    condition     = aws_elasticache_replication_group.valkey.transit_encryption_enabled && aws_vpc_security_group_ingress_rule.valkey_from_tasks.cidr_ipv4 == null
+    error_message = "Valkey takes TLS connections from the tasks' security group only."
+  }
+
+  assert {
+    condition     = strcontains(aws_ecs_task_definition.api.container_definitions, "ConnectionStrings__Valkey")
+    error_message = "The program gets Valkey's address from its secret."
   }
 }
 

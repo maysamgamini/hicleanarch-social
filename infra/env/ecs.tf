@@ -7,10 +7,12 @@ locals {
 
   # The running program gets only the modules' connection strings; the owner's goes to the
   # migration task alone.
-  module_secrets = [for key, role in local.db_roles : {
+  module_secrets = concat([for key, role in local.db_roles : {
     name      = "ConnectionStrings__${title(key)}"
     valueFrom = aws_secretsmanager_secret.connection[key].arn
-  }]
+    }],
+    [{ name = "ConnectionStrings__Valkey", valueFrom = aws_secretsmanager_secret.valkey.arn }],
+  )
   owner_secret = { name = "ConnectionStrings__Owner", valueFrom = aws_secretsmanager_secret.connection["owner"].arn }
 
   api_container = {
