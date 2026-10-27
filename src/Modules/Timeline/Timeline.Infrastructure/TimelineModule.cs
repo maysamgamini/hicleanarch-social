@@ -134,9 +134,9 @@ internal sealed record FeedReply(IReadOnlyList<FeedItemReply> Items, string? Nex
 
 internal sealed record AuthorReply(Guid AccountId, string Handle, string DisplayName);
 
-internal sealed record FeedItemReply(Guid PostId, AuthorReply Author, string Text, DateTimeOffset CreatedAt, DateTimeOffset? EditedAt)
+internal sealed record FeedItemReply(Guid PostId, AuthorReply Author, string Text, DateTimeOffset CreatedAt, DateTimeOffset? EditedAt, IReadOnlyList<string> Media)
 {
     public static FeedItemReply Of(FeedItem item) => new(
         item.Post.PostId, new AuthorReply(item.Author.AccountId, item.Author.Handle, item.Author.DisplayName),
-        item.Post.Text, item.Post.CreatedAt, item.Post.EditedAt);
+        item.Post.Text, item.Post.CreatedAt, item.Post.EditedAt, item.Post.Media ?? []);
 }

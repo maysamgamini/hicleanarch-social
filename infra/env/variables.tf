@@ -74,3 +74,9 @@ variable "neptune_engine_version" {
   type        = string
   default     = "1.4.5.1"
 }
+
+variable "media_upload_origins" {
+  description = "Origins whose browsers may PUT images to the media bucket's pre-signed URLs"
+  type        = list(string)
+  default     = ["*"]
+}

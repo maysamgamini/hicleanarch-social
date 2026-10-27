@@ -6,6 +6,8 @@
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
   <ItemGroup>
+    <!-- Apache 2.0: S3 for media (s3-l10); pre-signing needs no network call -->
+    <PackageVersion Include="AWSSDK.S3" Version="4.0.104.3" />
     <!-- Apache 2.0 -->
     <PackageVersion Include="EFCore.NamingConventions" Version="10.0.0" />
     <!-- MIT -->

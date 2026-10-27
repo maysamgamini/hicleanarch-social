@@ -58,7 +58,7 @@ public sealed record PostView(Guid PostId, Guid AuthorId, string? Text, string S
         post.Status.ToString().ToUpperInvariant(), post.CreatedAt, post.EditedAt, post.DeletedAt);
 }
 
-public sealed record PublishPost(Guid AuthorId, string? Text) : ICommand<PostView>;
+public sealed record PublishPost(Guid AuthorId, string? Text, IReadOnlyList<Guid>? MediaIds = null) : ICommand<PostView>;
 
 public sealed record EditPost(Guid PostId, Guid CallerId, string? Text) : ICommand<PostView>;
 
@@ -72,6 +72,7 @@ public sealed record GetPost(Guid PostId, Guid CallerId) : IQuery<PostView>;
 /// </summary>
 public sealed class PublishPostHandler(
     IPostRepository posts,
+    IMediaRepository media,
     TimeProvider clock,
     [FromKeyedServices(ModuleName.Value)] ITransactionScope transaction,
     [FromKeyedServices(ModuleName.Value)] IOutbox outbox) : ICommandHandler<PublishPost, PostView>
@@ -86,8 +87,21 @@ public sealed class PublishPostHandler(
             }
 
             var post = written.Value;
+            // Up to 4 images, each the author's own, uploaded, and in no other post.
+            var mediaIds = command.MediaIds ?? [];
+            if (mediaIds.Count > Media.MaxPerPost || mediaIds.Distinct().Count() != mediaIds.Count)
+            {
+                return Result.Failure<PostView>(MediaErrors.Unusable);
+            }
+
             await posts.Add(post, ct);
-            await outbox.Add(new PostPublished(Guid.CreateVersion7(), post.CreatedAt, post.Id, post.AuthorId, post.CreatedAt, post.Text), ct);
+            if (mediaIds.Count > 0 && await media.Attach(mediaIds, command.AuthorId, post.Id, ct) != mediaIds.Count)
+            {
+                return Result.Failure<PostView>(MediaErrors.Unusable); // the transaction is not committed
+            }
+
+            await outbox.Add(new PostPublished(Guid.CreateVersion7(), post.CreatedAt, post.Id, post.AuthorId, post.CreatedAt, post.Text,
+                mediaIds.Count == 0 ? null : mediaIds), ct);
             PostsMetrics.Stored.Add(1);
             return Result.Success(PostView.Of(post));
         }, cancellationToken);
@@ -162,22 +176,22 @@ public sealed class GetPostHandler(IPostRepository posts) : IQueryHandler<GetPos
 }
 
 /// <summary>Answers other modules: the feed hydrates a page with one call.</summary>
-public sealed class GetPostsHandler(IPostRepository posts) : IQueryHandler<GetPosts, IReadOnlyList<PostSummary>>
+public sealed class GetPostsHandler(IPostRepository posts, MediaUrls media) : IQueryHandler<GetPosts, IReadOnlyList<PostSummary>>
 {
     public async Task<Result<IReadOnlyList<PostSummary>>> Handle(GetPosts query, CancellationToken cancellationToken) =>
-        Result.Success(await posts.Active([.. query.PostIds.Distinct()], cancellationToken));
+        Result.Success(await media.On(await posts.Active([.. query.PostIds.Distinct()], cancellationToken), cancellationToken));
 }
 
-public sealed class GetRecentByAuthorsHandler(IPostRepository posts) : IQueryHandler<GetRecentByAuthors, IReadOnlyList<PostSummary>>
+public sealed class GetRecentByAuthorsHandler(IPostRepository posts, MediaUrls media) : IQueryHandler<GetRecentByAuthors, IReadOnlyList<PostSummary>>
 {
     public async Task<Result<IReadOnlyList<PostSummary>>> Handle(GetRecentByAuthors query, CancellationToken cancellationToken) =>
-        Result.Success(await posts.RecentByAuthors([.. query.AuthorIds.Distinct()], Math.Clamp(query.PerAuthor, 1, 800), cancellationToken));
+        Result.Success(await media.On(await posts.RecentByAuthors([.. query.AuthorIds.Distinct()], Math.Clamp(query.PerAuthor, 1, 800), cancellationToken), cancellationToken));
 }
 
-public sealed class GetRecentByAuthorHandler(IPostRepository posts) : IQueryHandler<GetRecentByAuthor, IReadOnlyList<PostSummary>>
+public sealed class GetRecentByAuthorHandler(IPostRepository posts, MediaUrls media) : IQueryHandler<GetRecentByAuthor, IReadOnlyList<PostSummary>>
 {
     public async Task<Result<IReadOnlyList<PostSummary>>> Handle(GetRecentByAuthor query, CancellationToken cancellationToken) =>
-        Result.Success(await posts.RecentByAuthor(query.AuthorId, query.Before, Math.Clamp(query.Limit, 1, 800), cancellationToken));
+        Result.Success(await media.On(await posts.RecentByAuthor(query.AuthorId, query.Before, Math.Clamp(query.Limit, 1, 800), cancellationToken), cancellationToken));
 }
 
 public sealed class GetRecentlyActiveAuthorsHandler(IPostRepository posts) : IQueryHandler<GetRecentlyActiveAuthors, IReadOnlyList<AuthorActivity>>
@@ -197,5 +211,6 @@ public static class PostsApplication
             .AddScoped<IQueryHandler<GetPosts, IReadOnlyList<PostSummary>>, GetPostsHandler>()
             .AddScoped<IQueryHandler<GetRecentByAuthors, IReadOnlyList<PostSummary>>, GetRecentByAuthorsHandler>()
             .AddScoped<IQueryHandler<GetRecentByAuthor, IReadOnlyList<PostSummary>>, GetRecentByAuthorHandler>()
-            .AddScoped<IQueryHandler<GetRecentlyActiveAuthors, IReadOnlyList<AuthorActivity>>, GetRecentlyActiveAuthorsHandler>();
+            .AddScoped<IQueryHandler<GetRecentlyActiveAuthors, IReadOnlyList<AuthorActivity>>, GetRecentlyActiveAuthorsHandler>()
+            .AddMediaApplication();
 }

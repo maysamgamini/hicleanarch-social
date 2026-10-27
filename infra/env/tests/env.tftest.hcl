@@ -46,6 +46,21 @@ mock_provider "aws" {
     }
   }
 
+  mock_resource "aws_s3_bucket" {
+    defaults = {
+      arn                         = "arn:aws:s3:::hicleanarch-social-media-mock"
+      bucket                      = "hicleanarch-social-media-mock"
+      bucket_regional_domain_name = "hicleanarch-social-media-mock.s3.us-east-1.amazonaws.com"
+    }
+  }
+
+  mock_resource "aws_cloudfront_distribution" {
+    defaults = {
+      arn         = "arn:aws:cloudfront::123456789012:distribution/EMOCK"
+      domain_name = "dmock.cloudfront.net"
+    }
+  }
+
   mock_resource "aws_neptune_cluster" {
     defaults = {
       endpoint = "graph.cluster-mock.us-east-1.neptune.amazonaws.com"
@@ -283,5 +298,25 @@ run "the_timeline_store_holds_only_compact_timelines_and_short_lived_keys_live_a
   assert {
     condition     = strcontains(aws_ecs_task_definition.api.container_definitions, "ConnectionStrings__ValkeyShort") && strcontains(aws_ecs_task_definition.worker.container_definitions, "ConnectionStrings__ValkeyShort")
     error_message = "Both roles get the short-lived store's address from its secret."
+  }
+}
+
+run "images_live_in_a_private_bucket_read_only_through_cloudfront" {
+  command = apply
+
+  assert {
+    condition = (aws_s3_bucket_public_access_block.media.block_public_acls && aws_s3_bucket_public_access_block.media.block_public_policy
+    && aws_s3_bucket_public_access_block.media.restrict_public_buckets && aws_s3_bucket.media.force_destroy)
+    error_message = "The media bucket is private, and the sandbox can destroy it with its images."
+  }
+
+  assert {
+    condition     = aws_cloudfront_origin_access_control.media.signing_behavior == "always" && aws_cloudfront_distribution.media.default_cache_behavior[0].viewer_protocol_policy == "redirect-to-https"
+    error_message = "CloudFront reads the bucket with origin access control and serves over HTTPS."
+  }
+
+  assert {
+    condition     = strcontains(aws_ecs_task_definition.api.container_definitions, "\"Media__Store\",\"value\":\"S3\"") && strcontains(aws_ecs_task_definition.api.container_definitions, "https://dmock.cloudfront.net")
+    error_message = "On AWS the program uses the S3 store, with public URLs through CloudFront."
   }
 }

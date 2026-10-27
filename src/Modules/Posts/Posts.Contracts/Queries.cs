@@ -2,8 +2,8 @@ using Social.BuildingBlocks.Application;
 
 namespace Posts.Contracts;
 
-/// <summary>A post as a feed shows it. Only active posts are ever summaries.</summary>
-public sealed record PostSummary(Guid PostId, Guid AuthorId, string Text, DateTimeOffset CreatedAt, DateTimeOffset? EditedAt);
+/// <summary>A post as a feed shows it, with the public URLs of its images (s3-l10). Only active posts are ever summaries.</summary>
+public sealed record PostSummary(Guid PostId, Guid AuthorId, string Text, DateTimeOffset CreatedAt, DateTimeOffset? EditedAt, IReadOnlyList<string>? Media = null);
 
 /// <summary>The active posts among these ids, in one read; deleted and unknown ids are left out.</summary>
 public sealed record GetPosts(IReadOnlyList<Guid> PostIds) : IQuery<IReadOnlyList<PostSummary>>;

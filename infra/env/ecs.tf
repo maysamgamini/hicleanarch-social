@@ -28,7 +28,7 @@ locals {
       containerPort = 8080
       protocol      = "tcp"
     }]
-    environment = [
+    environment = concat([
       { name = "OTEL_EXPORTER_OTLP_ENDPOINT", value = "http://localhost:4317" },
       { name = "OTEL_SERVICE_NAME", value = "social-api" },
       { name = "Auth__Authority", value = local.cognito_issuer },
@@ -37,7 +37,7 @@ locals {
       { name = "Graph__Uri", value = local.graph_uri },
       { name = "Graph__Auth", value = "none" },
       { name = "Host__Role", value = "Web" },
-    ]
+    ], local.media_environment)
     # SIGTERM, then this many seconds to finish requests, then SIGKILL.
     stopTimeout = 30
     secrets     = local.module_secrets

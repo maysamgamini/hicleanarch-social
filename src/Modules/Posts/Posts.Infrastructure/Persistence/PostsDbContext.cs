@@ -36,6 +36,20 @@ internal sealed class PostsDbContext(DbContextOptions<PostsDbContext> options) :
 
         // Each author's last post time, one row per author: which followed accounts posted most recently
         // is a read of a few thousand primary keys, not of their posts.
+        modelBuilder.Entity<Media>(media =>
+        {
+            media.ToTable("media");
+            media.HasKey(m => m.Id);
+            media.Property(m => m.Id).ValueGeneratedNever();
+            media.Property(m => m.ContentType).HasMaxLength(40);
+            media.Property(m => m.Status)
+                .HasConversion(s => s.ToString().ToUpperInvariant(), s => Enum.Parse<MediaStatus>(s, true))
+                .HasMaxLength(20);
+            media.Ignore(m => m.ObjectKey);
+            // A post's images in order, for hydration.
+            media.HasIndex(m => new { m.PostId, m.Position }).HasFilter("post_id IS NOT NULL").HasDatabaseName("media_by_post");
+        });
+
         modelBuilder.Entity<AuthorActivityRow>(activity =>
         {
             activity.ToTable("author_activity");

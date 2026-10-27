@@ -52,8 +52,8 @@ public interface IFollowerPages
     Task<(IReadOnlyList<Guid> Followers, Guid? Next)> Page(Guid author, Guid? after, int limit, CancellationToken cancellationToken);
 }
 
-/// <summary>A post as the feed shows it.</summary>
-public sealed record PostCard(Guid PostId, Guid AuthorId, string Text, DateTimeOffset CreatedAt, DateTimeOffset? EditedAt);
+/// <summary>A post as the feed shows it, with its images' public URLs (s3-l10).</summary>
+public sealed record PostCard(Guid PostId, Guid AuthorId, string Text, DateTimeOffset CreatedAt, DateTimeOffset? EditedAt, IReadOnlyList<string>? Media = null);
 
 /// <summary>Posts as the feed needs them: current text, deleted ones left out.</summary>
 public interface IPostSummaries

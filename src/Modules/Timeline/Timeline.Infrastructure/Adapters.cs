@@ -48,7 +48,7 @@ internal sealed class InProcessPostSummaries(IDispatcher dispatcher) : IPostSumm
 
     private static IReadOnlyList<PostCard> Cards(Social.BuildingBlocks.Domain.Result<IReadOnlyList<PostSummary>> result) =>
         result.IsSuccess
-            ? [.. result.Value.Select(p => new PostCard(p.PostId, p.AuthorId, p.Text, p.CreatedAt, p.EditedAt))]
+            ? [.. result.Value.Select(p => new PostCard(p.PostId, p.AuthorId, p.Text, p.CreatedAt, p.EditedAt, p.Media))]
             : throw new InvalidOperationException($"Posts refused a read: {result.Errors[0].Code}");
 }
 
@@ -138,7 +138,7 @@ internal sealed class InProcessRecentPosts(IServiceScopeFactory scopes) : IRecen
         var dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
         var result = await dispatcher.Query<GetRecentByAuthor, IReadOnlyList<PostSummary>>(new GetRecentByAuthor(author, limit, before), cancellationToken);
         return result.IsSuccess
-            ? [.. result.Value.Select(p => new PostCard(p.PostId, p.AuthorId, p.Text, p.CreatedAt, p.EditedAt))]
+            ? [.. result.Value.Select(p => new PostCard(p.PostId, p.AuthorId, p.Text, p.CreatedAt, p.EditedAt, p.Media))]
             : throw new InvalidOperationException($"Posts refused a read: {result.Errors[0].Code}");
     }
 }
