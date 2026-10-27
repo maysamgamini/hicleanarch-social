@@ -1,14 +1,13 @@
 using Accounts.Application;
 using Accounts.Domain;
 
-namespace Accounts.Infrastructure;
+namespace Accounts.UnitTests;
 
 /// <summary>
-/// Accounts kept in the process, for this lesson only: one lock guards both the accounts and the
-/// handle index, so two registrations of one handle cannot both succeed. Stored as snapshots, so a
-/// refused change never leaks into what is kept.
+/// A store in memory for the use-case tests: one lock guards the accounts and the handle index, as
+/// the unique index does in PostgreSQL. Snapshots, so a refused change never leaks into what is kept.
 /// </summary>
-internal sealed class InMemoryAccountRepository : IAccountRepository
+internal sealed class InMemoryAccounts : IAccountRepository
 {
     private sealed record Row(Guid Id, string Handle, string DisplayName, AccountStatus Status, DateTimeOffset RegisteredAt, DateTimeOffset UpdatedAt);
 

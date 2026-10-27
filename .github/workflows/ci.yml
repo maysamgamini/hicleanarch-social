@@ -20,6 +20,12 @@ jobs:
           global-json-file: global.json
       - run: dotnet build Social.slnx
       - run: dotnet test Social.slnx --no-build
+      - name: Every model change has its migration
+        run: |
+          dotnet tool restore
+          for project in $(grep -rl --include='*.csproj' EntityFrameworkCore.Design src/Modules); do
+            dotnet ef migrations has-pending-model-changes --project "$project" --no-build
+          done
 
   terraform:
     runs-on: ubuntu-latest

@@ -2,16 +2,19 @@ using System.Security.Claims;
 
 using Accounts.Application;
 using Accounts.Contracts;
+using Accounts.Infrastructure.Persistence;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 using Social.BuildingBlocks.Application;
 using Social.BuildingBlocks.Infrastructure;
 using Social.BuildingBlocks.Infrastructure.Identity;
+using Social.BuildingBlocks.Infrastructure.Persistence;
 
 namespace Accounts.Infrastructure;
 
@@ -21,10 +24,18 @@ namespace Accounts.Infrastructure;
 /// </summary>
 public static class AccountsModule
 {
-    public static IServiceCollection AddAccountsModule(this IServiceCollection services, IConfiguration configuration) =>
-        services
+    /// <summary>The module connects as its own database role, which can reach only the accounts schema.</summary>
+    public static IServiceCollection AddAccountsModule(this IServiceCollection services, IConfiguration configuration)
+    {
+        var connectionString = configuration.GetConnectionString("Accounts")
+            ?? throw new InvalidOperationException("ConnectionStrings:Accounts is not set.");
+        services.AddDbContext<AccountsDbContext>(db => AccountsDbOptions.Configure((DbContextOptionsBuilder<AccountsDbContext>)db, connectionString));
+        services.AddSingleton<IModuleMigrator, AccountsMigrator>();
+        services.AddSingleton(new ModuleDatabase("Accounts", AccountsDbContext.Schema, connectionString));
+        return services
             .AddAccountsApplication()
-            .AddSingleton<IAccountRepository, InMemoryAccountRepository>();
+            .AddScoped<IAccountRepository, EfAccountRepository>();
+    }
 
     public static IEndpointRouteBuilder MapAccountsEndpoints(this IEndpointRouteBuilder app)
     {

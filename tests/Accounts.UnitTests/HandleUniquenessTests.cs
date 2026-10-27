@@ -1,14 +1,13 @@
 using Accounts.Application;
-using Accounts.Infrastructure;
 
 namespace Accounts.UnitTests;
 
-/// <summary>The use case on the module's in-memory store: a handle belongs to one account, whatever its case.</summary>
+/// <summary>The use case on a store in memory: a handle belongs to one account, whatever its case.</summary>
 public class HandleUniquenessTests
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    private readonly UpdateMyProfileHandler _handler = new(new InMemoryAccountRepository(), TimeProvider.System);
+    private readonly UpdateMyProfileHandler _handler = new(new InMemoryAccounts(), TimeProvider.System);
 
     [Fact]
     public async Task A_handle_taken_in_another_case_is_refused()

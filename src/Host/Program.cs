@@ -4,6 +4,7 @@ using Accounts.Infrastructure;
 
 using Social.BuildingBlocks.Application;
 using Social.BuildingBlocks.Infrastructure.Identity;
+using Social.BuildingBlocks.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -28,7 +29,10 @@ if (args.FirstOrDefault() == "token")
 // The API speaks snake_case JSON: display_name, account_id.
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower);
 builder.Services.AddProblemDetails();
+// A database that cannot be reached is a 503 the client may retry, not a 500.
+builder.Services.AddExceptionHandler<DatabaseUnavailableHandler>();
 builder.Services.AddDispatcher();
+builder.Services.AddSingleton<DatabaseMigrator>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddTokenAuthentication(builder.Configuration);
 
@@ -36,6 +40,16 @@ builder.Services.AddTokenAuthentication(builder.Configuration);
 builder.Services.AddAccountsModule(builder.Configuration);
 
 var app = builder.Build();
+
+// `dotnet Social.Host.dll migrate` prepares the database and exits: the deploy's migration step,
+// run once per release as the schema owner before new tasks start, never part of start-up.
+if (args.FirstOrDefault() == "migrate")
+{
+    var owner = app.Configuration.GetConnectionString("Owner")
+        ?? throw new InvalidOperationException("ConnectionStrings:Owner is not set.");
+    await app.Services.GetRequiredService<DatabaseMigrator>().Run(owner, CancellationToken.None);
+    return;
+}
 
 app.UseExceptionHandler();
 app.UseStatusCodePages();
