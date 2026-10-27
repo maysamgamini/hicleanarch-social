@@ -19,8 +19,11 @@ internal sealed class GraphProjectionHandlers(IDispatcher dispatcher) :
     IIntegrationEventHandler<AccountRegistered>, IIntegrationEventHandler<ProfileUpdated>, IIntegrationEventHandler<AccountDeactivated>,
     IIntegrationEventHandler<FollowStarted>, IIntegrationEventHandler<FollowEnded>,
     IIntegrationEventHandler<AccountBlocked>, IIntegrationEventHandler<AccountUnblocked>,
-    IIntegrationEventHandler<AccountMuted>, IIntegrationEventHandler<AccountUnmuted>
+    IIntegrationEventHandler<AccountMuted>, IIntegrationEventHandler<AccountUnmuted>,
+    IIntegrationEventHandler<FollowerCountChanged>
 {
+    public Task Handle(FollowerCountChanged e, CancellationToken ct) => Send(new ProjectFollowerCount(e.AccountId, e.Followers, e.OccurredAt), ct);
+
     public Task Handle(AccountRegistered e, CancellationToken ct) => Send(new ProjectAccount(e.AccountId, e.Handle), ct);
 
     public Task Handle(ProfileUpdated e, CancellationToken ct) => Send(new ProjectAccount(e.AccountId, e.Handle), ct);

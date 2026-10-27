@@ -99,6 +99,16 @@ public sealed class MaintenanceTests(Neo4jServer neo4j)
         public Task Set(Guid reader, string kind, IReadOnlyList<Suggestion> suggestions, CancellationToken cancellationToken) => Task.CompletedTask;
 
         public Task Drop(Guid reader, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task Opened(Guid reader, DateTimeOffset at, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task<IReadOnlyList<Guid>> OpenedSince(DateTimeOffset since, int limit, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<Guid>>([]);
+
+        public Task<(DateTimeOffset At, long Changes)?> Precomputed(Guid reader, CancellationToken cancellationToken) => Task.FromResult<(DateTimeOffset, long)?>(null);
+
+        public Task SetPrecomputed(Guid reader, IReadOnlyDictionary<string, IReadOnlyList<Suggestion>> lists, DateTimeOffset at, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task<bool> CountChange(Guid reader, CancellationToken cancellationToken) => Task.FromResult(false);
     }
 
     private async Task<Guid> Account()

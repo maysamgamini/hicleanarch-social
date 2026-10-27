@@ -35,6 +35,7 @@ locals {
       { name = "Auth__ClientId", value = aws_cognito_user_pool_client.api.id },
       { name = "ForwardedHeaders__KnownNetwork", value = aws_vpc.main.cidr_block },
       { name = "Graph__Uri", value = local.graph_uri },
+      { name = "Graph__ReaderUri", value = var.graph_readers > 0 ? local.graph_reader_uri : local.graph_uri },
       { name = "Graph__Auth", value = "none" },
       { name = "Host__Role", value = "Web" },
       # Hydration reads Aurora's reader endpoint with each module's own login (s3-l11).

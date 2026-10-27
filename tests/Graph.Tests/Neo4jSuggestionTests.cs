@@ -78,4 +78,27 @@ public sealed class Neo4jSuggestionTests(Neo4jServer neo4j) : SuggestionContract
             Assert.Equal(0L, degree["n"].As<long>());
         }
     }
+
+    private async Task<long> Followers(Guid account)
+    {
+        await using var session = neo4j.Driver.AsyncSession();
+        var record = await session.ExecuteReadAsync(async tx => await (await tx.RunAsync(
+            "MATCH (a:Account {id: $id}) RETURN a.followers AS n", new { id = account.ToString("D") })).SingleAsync());
+        return record["n"].As<long>();
+    }
+
+    [Fact]
+    public async Task A_follow_does_not_write_the_followees_node_and_the_announced_count_sets_its_degree()
+    {
+        var (fan, star) = (await Account(), await Account());
+        var graph = (Neo4jGraph)Projection;
+
+        await Follow(fan, star);
+        Assert.Equal(0L, await Followers(star)); // the edge's transaction left the followee alone
+
+        var now = DateTimeOffset.UtcNow;
+        Assert.True(await graph.SetFollowers(star, 25_000, now, Ct));
+        Assert.False(await graph.SetFollowers(star, 24_000, now.AddSeconds(-1), Ct)); // an older announcement, delivered late
+        Assert.Equal(25_000L, await Followers(star));
+    }
 }

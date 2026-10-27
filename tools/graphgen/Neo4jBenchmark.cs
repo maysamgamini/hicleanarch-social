@@ -22,22 +22,63 @@ internal static class Neo4jBenchmark
         var candidates = Enumerable.Range(0, graph.Accounts).Where(i => graph.Following[i] > 0).ToArray();
         var readers = Enumerable.Range(0, options.Readers).Select(_ => graph.Ids[candidates[random.Next(candidates.Length)]]).ToArray();
         var adapter = new Neo4jGraph(driver);
-        var times = new List<double>();
-        foreach (var reader in readers)
-        {
-            var clock = Stopwatch.StartNew();
-            await adapter.WhoToFollow(reader, TraversalLimits.Default, CancellationToken.None);
-            times.Add(clock.Elapsed.TotalMilliseconds);
-        }
-
-        times.Sort();
         var c = CultureInfo.InvariantCulture;
         var report = new StringBuilder();
-        report.AppendLine(c, $"Neo4j 5.26 Community in Docker, the same graph and readers ({options.Readers}), the adapter's WhoToFollow query:");
-        report.AppendLine("| Shape | p50 ms | p99 ms | timeouts |");
-        report.AppendLine("|---|---|---|---|");
-        report.AppendLine(c, $"| two-hop, capped (Neo4j adapter) | {Percentile(times, 0.50):F1} | {Percentile(times, 0.99):F1} | 0 |");
+        report.AppendLine(c, $"Neo4j 5.26 Community in Docker, the same graph and readers ({options.Readers}), the adapter's WhoToFollow query.");
+        report.AppendLine(Distribution(graph));
+
+        // One untimed pass first: the first queries of a fresh database read its pages from disk.
+        foreach (var reader in readers)
+        {
+            await adapter.WhoToFollow(reader, TraversalLimits.Default, CancellationToken.None);
+        }
+
+        // The caps tuned from the distribution (s3-l12): each row is the p99 the cap produced, beside it.
+        report.AppendLine("| Supernode cap (followers) | Intermediate cap (following) | p50 ms | p99 ms | max ms |");
+        report.AppendLine("|---|---|---|---|---|");
+        foreach (var limits in Caps(graph))
+        {
+            var times = new List<double>();
+            foreach (var reader in readers)
+            {
+                var clock = Stopwatch.StartNew();
+                await adapter.WhoToFollow(reader, limits, CancellationToken.None);
+                times.Add(clock.Elapsed.TotalMilliseconds);
+            }
+
+            times.Sort();
+            report.AppendLine(c, $"| {limits.SupernodeFollowers:N0} | {limits.MaxIntermediateFollowing:N0} | {Percentile(times, 0.50):F1} | {Percentile(times, 0.99):F1} | {times[^1]:F1} |");
+        }
+
         return report.ToString();
+    }
+
+    /// <summary>The default caps, then caps set at the distribution's 99.9th and 99th percentiles, then no supernode cap at all.</summary>
+    private static IEnumerable<TraversalLimits> Caps(Graph graph)
+    {
+        var followers = graph.Followers.Order().ToArray();
+        var following = graph.Following.Order().ToArray();
+        static int At(int[] sorted, double q) => Math.Max(1, sorted[Math.Min(sorted.Length - 1, (int)(q * sorted.Length))]);
+        var d = TraversalLimits.Default;
+        yield return d;
+        yield return d with { SupernodeFollowers = At(followers, 0.999), MaxIntermediateFollowing = At(following, 0.999) };
+        yield return d with { SupernodeFollowers = At(followers, 0.99), MaxIntermediateFollowing = At(following, 0.99) };
+        yield return d with { SupernodeFollowers = int.MaxValue, MaxIntermediateFollowing = int.MaxValue };
+    }
+
+    /// <summary>The degree distribution the caps are read from.</summary>
+    private static string Distribution(Graph graph)
+    {
+        var c = CultureInfo.InvariantCulture;
+        string Row(string name, int[] degrees)
+        {
+            var sorted = degrees.Order().ToArray();
+            int At(double q) => sorted[Math.Min(sorted.Length - 1, (int)(q * sorted.Length))];
+            return string.Create(c, $"| {name} | {At(0.5):N0} | {At(0.9):N0} | {At(0.99):N0} | {At(0.999):N0} | {sorted[^1]:N0} |");
+        }
+
+        return string.Join(Environment.NewLine,
+            "| Degree | p50 | p90 | p99 | p99.9 | max |", "|---|---|---|---|---|---|", Row("followers", graph.Followers), Row("following", graph.Following));
     }
 
     private static async Task Load(IDriver driver, Graph graph)

@@ -49,6 +49,19 @@ resource "aws_neptune_cluster_instance" "graph" {
   apply_immediately  = true
 }
 
+# The suggestion walks run on a reader instance (s3-l12), so a burst of them never slows the
+# projection's writes; the reader endpoint balances over the readers there are.
+resource "aws_neptune_cluster_instance" "graph_reader" {
+  count              = var.graph_readers
+  identifier         = "${var.project}-graph-reader-${count.index}"
+  cluster_identifier = aws_neptune_cluster.graph.id
+  instance_class     = "db.serverless"
+  engine             = "neptune"
+  apply_immediately  = true
+  depends_on         = [aws_neptune_cluster_instance.graph]
+}
+
 locals {
-  graph_uri = "bolt+s://${aws_neptune_cluster.graph.endpoint}:8182"
+  graph_uri        = "bolt+s://${aws_neptune_cluster.graph.endpoint}:8182"
+  graph_reader_uri = "bolt+s://${aws_neptune_cluster.graph.reader_endpoint}:8182"
 }

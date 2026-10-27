@@ -15,44 +15,53 @@ SET a.active = false
 RETURN a.id AS id
 
 // name: ApplyFollow
-// The two nodes are locked first (a property written and removed), so two projections of one pair
-// run one after the other under Read Committed; then the edge's version is compared. A pair whose
-// node is missing matches nothing: the caller fails and delivery retries. Degrees move only on a flip.
+// The follower's node is locked first (a property written and removed), so two projections of one
+// pair run one after the other under Read Committed; then the edge's version is compared. A pair
+// whose node is missing matches nothing: the caller fails and delivery retries. Only the follower's
+// own degree moves here, on a flip: the followee's followers come from FollowerCountChanged
+// (SetFollowers, s3-l12), so a celebrity's node is not written by every follow.
 MATCH (a:Account {id: $from}), (b:Account {id: $to})
-SET a.lock = true, b.lock = true
+SET a.lock = true
 MERGE (a)-[r:FOLLOWS]->(b)
   ON CREATE SET r.v = 0, r.on = false, r.since = $since
-WITH a, b, r, r.v < $v AS newer, r.on AS was
+WITH a, r, r.v < $v AS newer, r.on AS was
 SET r.on = CASE WHEN newer THEN $on ELSE r.on END,
     r.since = CASE WHEN newer THEN $since ELSE r.since END,
     r.v = CASE WHEN newer THEN $v ELSE r.v END,
-    a.following = a.following + CASE WHEN newer AND was <> $on THEN $step ELSE 0 END,
-    b.followers = b.followers + CASE WHEN newer AND was <> $on THEN $step ELSE 0 END
-REMOVE a.lock, b.lock
+    a.following = a.following + CASE WHEN newer AND was <> $on THEN $step ELSE 0 END
+REMOVE a.lock
 RETURN newer AS applied
+
+// name: SetFollowers
+// The one writer of an account's followers degree: the count Relationships announced, if it is newer
+// than the one the node holds (announcements may arrive out of order).
+MATCH (a:Account {id: $id})
+WHERE coalesce(a.followersAt, 0) < $at
+SET a.followers = $followers, a.followersAt = $at
+RETURN a.id AS id
 
 // name: ApplyBlock
 MATCH (a:Account {id: $from}), (b:Account {id: $to})
-SET a.lock = true, b.lock = true
+SET a.lock = true
 MERGE (a)-[r:BLOCKS]->(b)
   ON CREATE SET r.v = 0, r.on = false, r.since = $since
-WITH a, b, r, r.v < $v AS newer
+WITH a, r, r.v < $v AS newer
 SET r.on = CASE WHEN newer THEN $on ELSE r.on END,
     r.since = CASE WHEN newer THEN $since ELSE r.since END,
     r.v = CASE WHEN newer THEN $v ELSE r.v END
-REMOVE a.lock, b.lock
+REMOVE a.lock
 RETURN newer AS applied
 
 // name: ApplyMute
 MATCH (a:Account {id: $from}), (b:Account {id: $to})
-SET a.lock = true, b.lock = true
+SET a.lock = true
 MERGE (a)-[r:MUTES]->(b)
   ON CREATE SET r.v = 0, r.on = false, r.since = $since
-WITH a, b, r, r.v < $v AS newer
+WITH a, r, r.v < $v AS newer
 SET r.on = CASE WHEN newer THEN $on ELSE r.on END,
     r.since = CASE WHEN newer THEN $since ELSE r.since END,
     r.v = CASE WHEN newer THEN $v ELSE r.v END
-REMOVE a.lock, b.lock
+REMOVE a.lock
 RETURN newer AS applied
 
 // name: WhoToFollow

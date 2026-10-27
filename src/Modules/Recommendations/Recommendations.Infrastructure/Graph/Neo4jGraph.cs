@@ -9,9 +9,14 @@ namespace Recommendations.Infrastructure.Graph;
 /// The graph in a graph database, over Bolt with the official Neo4j driver: Neo4j 5.26 locally and
 /// in tests, Amazon Neptune on AWS. Writes and reads run as managed transactions, which the driver
 /// retries on transient errors (a deadlock between two projections, Neptune's false conflicts).
+/// The suggestion walks go to <paramref name="walker"/> (s3-l12: a Neptune reader instance on AWS,
+/// Graph:ReaderUri); writes, the serve-time filter (a block must count at once) and the nightly jobs
+/// go to the writer.
 /// </summary>
-internal sealed class Neo4jGraph(IDriver driver) : IGraphProjection, IGraphReads, IGraphMaintenance
+internal sealed class Neo4jGraph(IDriver driver, IDriver? walker = null) : IGraphProjection, IGraphReads, IGraphMaintenance
 {
+    private IDriver Walks => walker ?? driver;
+
     public async Task UpsertAccount(Guid accountId, string handle, CancellationToken cancellationToken) =>
         await Write("UpsertAccount", new { id = Id(accountId), handle });
 
@@ -40,9 +45,12 @@ internal sealed class Neo4jGraph(IDriver driver) : IGraphProjection, IGraphReads
             : rows[0]["applied"].As<bool>();
     }
 
+    public async Task<bool> SetFollowers(Guid accountId, long followers, DateTimeOffset at, CancellationToken cancellationToken) =>
+        (await Write("SetFollowers", new { id = Id(accountId), followers, at = at.ToUnixTimeMilliseconds() })).Count == 1;
+
     public async Task<IReadOnlyList<Suggestion>> WhoToFollow(Guid reader, TraversalLimits limits, CancellationToken cancellationToken)
     {
-        await using var session = driver.AsyncSession();
+        await using var session = Walks.AsyncSession();
         return await session.ExecuteReadAsync(async tx =>
         {
             var cursor = await tx.RunAsync(CypherQueries.Get("WhoToFollow"), new
@@ -86,14 +94,14 @@ internal sealed class Neo4jGraph(IDriver driver) : IGraphProjection, IGraphReads
     }
 
     public async Task<IReadOnlyList<Suggestion>> FriendsOfFriends(Guid reader, TraversalLimits limits, CancellationToken cancellationToken) =>
-        [.. (await Read("FriendsOfFriends", new
+        [.. (await Read("FriendsOfFriends", walk: true, new
         {
             me = Id(reader), supernode = limits.SupernodeFollowers, maxFollowing = limits.MaxIntermediateFollowing,
             intermediates = limits.Intermediates, results = limits.Results,
         })).Select(r => new Suggestion(Guid.Parse(r["id"].As<string>()), r["handle"].As<string>(), r["mutual"].As<long>()))];
 
     public async Task<IReadOnlyList<Suggestion>> FollowersNotFollowedBack(Guid reader, int limit, TraversalLimits limits, CancellationToken cancellationToken) =>
-        [.. (await Read("FollowersNotFollowedBack", new { me = Id(reader), limit }))
+        [.. (await Read("FollowersNotFollowedBack", walk: true, new { me = Id(reader), limit }))
             .Select(r => new Suggestion(Guid.Parse(r["id"].As<string>()), r["handle"].As<string>(), 0))];
 
     public async Task<IReadOnlySet<Guid>> HiddenNow(Guid reader, IReadOnlyList<Guid> accounts, CancellationToken cancellationToken) =>
@@ -115,9 +123,11 @@ internal sealed class Neo4jGraph(IDriver driver) : IGraphProjection, IGraphReads
         return deleted;
     }
 
-    private async Task<List<IRecord>> Read(string query, object parameters)
+    private Task<List<IRecord>> Read(string query, object parameters) => Read(query, walk: false, parameters);
+
+    private async Task<List<IRecord>> Read(string query, bool walk, object parameters)
     {
-        await using var session = driver.AsyncSession();
+        await using var session = (walk ? Walks : driver).AsyncSession();
         return await session.ExecuteReadAsync(async tx => await (await tx.RunAsync(CypherQueries.Get(query), parameters)).ToListAsync());
     }
 

@@ -80,3 +80,9 @@ variable "media_upload_origins" {
   type        = list(string)
   default     = ["*"]
 }
+
+variable "graph_readers" {
+  description = "Neptune reader instances for the suggestion walks (0 sends them to the writer)"
+  type        = number
+  default     = 1
+}

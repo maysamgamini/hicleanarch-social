@@ -65,3 +65,35 @@ internal sealed partial class GraphMaintenance(IServiceScopeFactory scopes, ICon
     [LoggerMessage(Level = LogLevel.Warning, Message = "Graph maintenance failed; the next night tries again")]
     private static partial void LogFailed(ILogger logger, Exception exception);
 }
+
+/// <summary>
+/// The precompute pass on worker tasks (Recommendations:Precompute:Every, 5 minutes): both lists for
+/// every reader who opened suggestions in the last 7 days and whose lists are due.
+/// </summary>
+internal sealed partial class SuggestionPrecompute(IServiceScopeFactory scopes, IConfiguration configuration, ILogger<SuggestionPrecompute> logger) : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        var every = configuration.GetValue("Recommendations:Precompute:Every", TimeSpan.FromMinutes(5));
+        using var timer = new PeriodicTimer(every);
+        while (await timer.WaitForNextTickAsync(stoppingToken))
+        {
+            try
+            {
+                await using var scope = scopes.CreateAsyncScope();
+                var computed = await scope.ServiceProvider.GetRequiredService<IDispatcher>().Send<PrecomputeSuggestions, int>(new PrecomputeSuggestions(), stoppingToken);
+                LogPass(logger, computed.IsSuccess ? computed.Value : 0);
+            }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                LogFailed(logger, e); // the next pass tries again; requests traverse meanwhile
+            }
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Precomputed suggestions for {Count} readers")]
+    private static partial void LogPass(ILogger logger, int count);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "A suggestions precompute pass failed")]
+    private static partial void LogFailed(ILogger logger, Exception exception);
+}

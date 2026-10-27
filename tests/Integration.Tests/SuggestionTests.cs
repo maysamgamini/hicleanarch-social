@@ -15,7 +15,7 @@ public sealed class SuggestionTests(Postgres postgres) : IntegrationTest(postgre
     internal static async Task<JsonElement> Fresh(HttpClient client, string valkey, Guid reader)
     {
         await using var connection = await ConnectionMultiplexer.ConnectAsync(valkey);
-        await connection.GetDatabase().KeyDeleteAsync([$"rec:sugg:{reader:N}:who-to-follow", $"rec:sugg:{reader:N}:people-you-may-know"]);
+        await connection.GetDatabase().KeyDeleteAsync([$"rec:sugg:{reader:N}:who-to-follow", $"rec:sugg:{reader:N}:people-you-may-know", $"rec:pre:{reader:N}"]);
         return await client.GetFromJsonAsync<JsonElement>("/v1/suggestions/who-to-follow", TestContext.Current.CancellationToken);
     }
 

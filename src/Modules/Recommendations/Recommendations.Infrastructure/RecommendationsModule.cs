@@ -30,6 +30,8 @@ namespace Recommendations.Infrastructure;
 /// <summary>Everything a host needs to run the Recommendations module. Nobody calls it; it only listens.</summary>
 public static class RecommendationsModule
 {
+    private const string GraphReader = "graph:reader";
+
     public static IServiceCollection AddRecommendationsModule(this IServiceCollection services, IConfiguration configuration)
     {
         var connectionString = configuration.GetConnectionString("Recommendations")
@@ -44,6 +46,11 @@ public static class RecommendationsModule
         }
 
         services.AddSingleton(_ => GraphDatabase.Driver(graphUri, GraphAuth(configuration)));
+        // The suggestion walks on a reader instance (s3-l12): Graph:ReaderUri, Neptune's reader endpoint
+        // on AWS; without it, the writer's own address.
+        var readerUri = configuration["Graph:ReaderUri"];
+        services.AddKeyedSingleton(GraphReader, (sp, _) =>
+            string.IsNullOrEmpty(readerUri) ? sp.GetRequiredService<IDriver>() : GraphDatabase.Driver(readerUri, GraphAuth(configuration)));
         services.AddSingleton<IModuleMigrator>(sp => new RecommendationsMigrator(sp.GetRequiredService<IDriver>()));
 
         services.AddSingleton(new ModuleDatabase("Recommendations", RecommendationsDbContext.Schema, connectionString));
@@ -59,8 +66,11 @@ public static class RecommendationsModule
         services.AddEventHandler<AccountUnblocked, GraphProjectionHandlers>(ModuleName.Value);
         services.AddEventHandler<AccountMuted, GraphProjectionHandlers>(ModuleName.Value);
         services.AddEventHandler<AccountUnmuted, GraphProjectionHandlers>(ModuleName.Value);
+        // The followers degree, from the count Relationships announces (s3-l12).
+        services.AddEventHandler<FollowerCountChanged, GraphProjectionHandlers>(ModuleName.Value);
 
         services.AddHostedService<GraphMaintenance>();
+        services.AddHostedService<SuggestionPrecompute>();
         if (!configuration.HasValkey())
         {
             throw new InvalidOperationException("ConnectionStrings:Valkey is not set: suggestions are cached there.");
@@ -69,7 +79,7 @@ public static class RecommendationsModule
         services.AddShortLivedValkey(configuration);
         return services
             .AddRecommendationsApplication()
-            .AddSingleton<Neo4jGraph>()
+            .AddSingleton(sp => new Neo4jGraph(sp.GetRequiredService<IDriver>(), sp.GetRequiredKeyedService<IDriver>(GraphReader)))
             .AddSingleton<IGraphProjection>(sp => sp.GetRequiredService<Neo4jGraph>())
             .AddSingleton<IGraphReads>(sp => sp.GetRequiredService<Neo4jGraph>())
             .AddSingleton<IGraphMaintenance>(sp => sp.GetRequiredService<Neo4jGraph>())

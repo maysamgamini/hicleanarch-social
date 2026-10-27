@@ -22,6 +22,12 @@ public interface IGraphProjection
     /// </summary>
     Task<bool> Apply(EdgeChange change, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Sets the account's followers degree to Relationships' count, unless the node holds a newer one.
+    /// False when the account is not in the graph yet or the count is older.
+    /// </summary>
+    Task<bool> SetFollowers(Guid accountId, long followers, DateTimeOffset at, CancellationToken cancellationToken);
+
     /// <summary>Hides <paramref name="account"/> from the reader's suggestions until then. False if either account is not in the graph.</summary>
     Task<bool> Dismiss(Guid reader, Guid account, DateTimeOffset until, CancellationToken cancellationToken);
 }
@@ -42,15 +48,36 @@ public interface IGraphReads
     Task<IReadOnlySet<Guid>> HiddenNow(Guid reader, IReadOnlyList<Guid> accounts, CancellationToken cancellationToken);
 }
 
-/// <summary>Computed lists, kept an hour per reader and kind, so a reader costs one traversal an hour.</summary>
+/// <summary>
+/// Computed lists in the short-lived store. On request: kept an hour per reader and kind, so a reader
+/// costs one traversal an hour. Precomputed (s3-l12): both kinds for a reader who opened suggestions
+/// in the last 7 days, refreshed in the background every 24 hours or after ten follow changes.
+/// </summary>
 public interface ISuggestionCache
 {
+    /// <summary>The precomputed list if there is one, else the on-request one, else null.</summary>
     Task<IReadOnlyList<Suggestion>?> Get(Guid reader, string kind, CancellationToken cancellationToken);
 
+    /// <summary>An on-request list, for an hour.</summary>
     Task Set(Guid reader, string kind, IReadOnlyList<Suggestion> suggestions, CancellationToken cancellationToken);
 
-    /// <summary>Drops both of the reader's lists.</summary>
+    /// <summary>Drops both of the reader's on-request lists.</summary>
     Task Drop(Guid reader, CancellationToken cancellationToken);
+
+    /// <summary>The reader opened suggestions: they are precomputed for the next 7 days.</summary>
+    Task Opened(Guid reader, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>Readers who opened suggestions since then, oldest first, at most <paramref name="limit"/>; older ones are forgotten.</summary>
+    Task<IReadOnlyList<Guid>> OpenedSince(DateTimeOffset since, int limit, CancellationToken cancellationToken);
+
+    /// <summary>When the reader's lists were precomputed and how many follow changes since; null when they have none.</summary>
+    Task<(DateTimeOffset At, long Changes)?> Precomputed(Guid reader, CancellationToken cancellationToken);
+
+    /// <summary>Stores both precomputed lists, and starts the change count again.</summary>
+    Task SetPrecomputed(Guid reader, IReadOnlyDictionary<string, IReadOnlyList<Suggestion>> lists, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>Counts a follow change of a reader with precomputed lists. False when the reader has none.</summary>
+    Task<bool> CountChange(Guid reader, CancellationToken cancellationToken);
 }
 
 /// <summary>Dismissals, kept durably in Recommendations' own schema: the graph's DISMISSED edges are their projection.</summary>

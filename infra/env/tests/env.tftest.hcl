@@ -63,7 +63,8 @@ mock_provider "aws" {
 
   mock_resource "aws_neptune_cluster" {
     defaults = {
-      endpoint = "graph.cluster-mock.us-east-1.neptune.amazonaws.com"
+      endpoint        = "graph.cluster-mock.us-east-1.neptune.amazonaws.com"
+      reader_endpoint = "graph.cluster-ro-mock.us-east-1.neptune.amazonaws.com"
     }
   }
 
@@ -327,5 +328,14 @@ run "hydration_reads_the_reader_endpoint" {
   assert {
     condition     = strcontains(aws_ecs_task_definition.api.container_definitions, "Database__ReaderHost") && strcontains(aws_ecs_task_definition.worker.container_definitions, "Database__ReaderHost")
     error_message = "The program gets Aurora's reader endpoint for its read side."
+  }
+}
+
+run "the_suggestion_walks_go_to_a_neptune_reader" {
+  command = apply
+
+  assert {
+    condition     = length(aws_neptune_cluster_instance.graph_reader) == 1 && strcontains(aws_ecs_task_definition.api.container_definitions, "bolt+s://graph.cluster-ro-mock.us-east-1.neptune.amazonaws.com:8182")
+    error_message = "One reader instance, and the program walks the graph through the reader endpoint."
   }
 }
