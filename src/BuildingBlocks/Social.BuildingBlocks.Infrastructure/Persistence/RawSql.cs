@@ -3,10 +3,13 @@ using Microsoft.EntityFrameworkCore.Storage;
 
 using Npgsql;
 
-namespace Relationships.Infrastructure.Persistence;
+namespace Social.BuildingBlocks.Infrastructure.Persistence;
 
-/// <summary>SQL on the context's own connection and inside its open transaction, as it is written.</summary>
-internal static class RawSql
+/// <summary>
+/// SQL on a module context's own connection and inside its open transaction, as it is written: for
+/// the statements that are the rules (orm-role), where EF Core would hide what runs.
+/// </summary>
+public static class RawSql
 {
     public static async Task<NpgsqlCommand> Command(this DbContext db, string sql, CancellationToken cancellationToken, params (string Name, object Value)[] parameters)
     {

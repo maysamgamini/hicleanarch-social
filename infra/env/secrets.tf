@@ -11,6 +11,7 @@ locals {
   db_roles = {
     accounts      = "accounts_app"
     relationships = "relationships_app"
+    posts         = "posts_app"
   }
 
   # TLS with the server's certificate checked against the RDS CA bundle, which the image carries.

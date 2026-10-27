@@ -82,7 +82,7 @@ public sealed class Postgres : IAsyncLifetime
 public sealed class TestDatabase(string owner)
 {
     /// <summary>Every module with a schema, as its connection string name and its role's name prefix.</summary>
-    public static readonly string[] Modules = ["Accounts", "Relationships"];
+    public static readonly string[] Modules = ["Accounts", "Relationships", "Posts"];
 
     public string Owner { get; } = owner;
 

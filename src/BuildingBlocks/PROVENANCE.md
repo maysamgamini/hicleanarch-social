@@ -72,3 +72,4 @@ upstream tag. Each later re-vendor is a commit of its own with a row below.
 
 | Tag | File | Change | Why |
 |---|---|---|---|
+| s2-l07 | Infrastructure/Persistence/RawSql.cs | added | SQL on a module context's connection and open transaction, for the statements that are rules (pair lock, guarded counter, keyset pages); first written in Relationships (s2-l04), shared once Posts needed it too. |

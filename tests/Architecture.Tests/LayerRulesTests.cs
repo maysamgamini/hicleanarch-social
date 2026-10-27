@@ -19,6 +19,7 @@ public class LayerRulesTests
                 "Social.Host", "Social.BuildingBlocks.Domain", "Social.BuildingBlocks.Application", "Social.BuildingBlocks.Infrastructure",
                 "Accounts.Domain", "Accounts.Application", "Accounts.Infrastructure", "Accounts.Contracts",
                 "Relationships.Domain", "Relationships.Application", "Relationships.Infrastructure", "Relationships.Contracts",
+                "Posts.Domain", "Posts.Application", "Posts.Infrastructure", "Posts.Contracts",
             },
             All.Select(a => a.GetName().Name!).ToHashSet());
 

@@ -1,6 +1,8 @@
 using Relationships.Application;
 using Relationships.Domain;
 
+using Social.BuildingBlocks.Infrastructure.Persistence;
+
 namespace Relationships.Infrastructure.Persistence;
 
 /// <summary>

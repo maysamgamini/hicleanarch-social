@@ -2,15 +2,14 @@ name: sandbox
 
 # Run only in a learner's own AWS account: apply the sandbox environment, deploy the current main,
 # smoke-test it, destroy it. Needs the repository variables AWS_DEPLOY_ROLE_ARN and TF_STATE_BUCKET
-# (outputs of infra/bootstrap, applied once by the learner). Without them, nothing runs.
+# (outputs of infra/bootstrap, applied once by the learner). Without them, nothing runs. Started by
+# hand only: no schedule, so nothing ever runs in an account by itself.
 on:
   workflow_dispatch:
     inputs:
       keep_minutes:
         description: "Minutes to keep the environment up after the smoke test (0 = destroy at once)"
         default: "0"
-  schedule:
-    - cron: "17 3 * * *" # nightly: destroy anything left up
 
 permissions:
   id-token: write
@@ -26,7 +25,7 @@ env:
 
 jobs:
   run:
-    if: github.event_name == 'workflow_dispatch' && vars.AWS_DEPLOY_ROLE_ARN != ''
+    if: vars.AWS_DEPLOY_ROLE_ARN != ''
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -115,19 +114,3 @@ jobs:
           tofu -chdir=infra/env init -input=false -backend-config="bucket=$STATE_BUCKET"
           tofu -chdir=infra/env destroy -input=false -auto-approve
 
-  sweep:
-    if: github.event_name == 'schedule' && vars.AWS_DEPLOY_ROLE_ARN != ''
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
-        with:
-          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-      - uses: opentofu/setup-opentofu@592200bd4b9bbf4772ace78f887668b1aee8f716 # v1.0.5
-      - name: Destroy anything left up
-        env:
-          STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
-        run: |
-          tofu -chdir=infra/env init -input=false -backend-config="bucket=$STATE_BUCKET"
-          tofu -chdir=infra/env destroy -input=false -auto-approve

@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Posts.Contracts\Posts.Contracts.csproj" />
+    <ProjectReference Include="..\Posts.Domain\Posts.Domain.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Social.BuildingBlocks.Application\Social.BuildingBlocks.Application.csproj" />
+  </ItemGroup>
+
+</Project>

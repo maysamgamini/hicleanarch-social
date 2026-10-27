@@ -1,5 +1,7 @@
 using Relationships.Application;
 
+using Social.BuildingBlocks.Infrastructure.Persistence;
+
 namespace Relationships.Infrastructure.Persistence;
 
 /// <summary>Keyset pages: the next page starts after the last id of this one, so a page costs the same at any depth.</summary>
