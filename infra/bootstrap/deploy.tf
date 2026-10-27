@@ -89,7 +89,7 @@ data "aws_iam_policy_document" "deploy" {
       "ecr:BatchCheckLayerAvailability", "ecr:InitiateLayerUpload", "ecr:UploadLayerPart", "ecr:CompleteLayerUpload",
       "ecr:PutImage", "ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer", "ecr:DescribeImages",
     ]
-    resources = [aws_ecr_repository.api.arn]
+    resources = [aws_ecr_repository.api.arn, aws_ecr_repository.gateway.arn]
   }
   statement {
     sid       = "StateBucket"

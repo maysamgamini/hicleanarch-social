@@ -94,6 +94,15 @@ resource "aws_vpc_security_group_ingress_rule" "tasks_from_alb" {
   ip_protocol                  = "tcp"
 }
 
+# The gateway's tasks reach the monolith's on 8080 by private address (s3-l14).
+resource "aws_vpc_security_group_ingress_rule" "tasks_from_tasks" {
+  security_group_id            = aws_security_group.tasks.id
+  referenced_security_group_id = aws_security_group.tasks.id
+  from_port                    = 8080
+  to_port                      = 8080
+  ip_protocol                  = "tcp"
+}
+
 resource "aws_vpc_security_group_egress_rule" "tasks_out" {
   security_group_id = aws_security_group.tasks.id
   cidr_ipv4         = "0.0.0.0/0"

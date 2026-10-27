@@ -8,6 +8,9 @@
   <Folder Name="/src/Host/">
     <Project Path="src/Host/Social.Host.csproj" />
   </Folder>
+  <Folder Name="/src/Gateway/">
+    <Project Path="src/Gateway/Social.Gateway.csproj" />
+  </Folder>
   <Folder Name="/src/Modules/" />
   <Folder Name="/src/Modules/Accounts/">
     <Project Path="src/Modules/Accounts/Accounts.Application/Accounts.Application.csproj" />

@@ -39,8 +39,10 @@ jobs:
           for project in $(grep -rl --include='*.csproj' EntityFrameworkCore.Design src/Modules); do
             dotnet ef migrations has-pending-model-changes --project "$project" --no-build
           done
-      - name: The image builds
-        run: docker build -q -t social-api:ci .
+      - name: The images build
+        run: |
+          docker build -q -t social-api:ci .
+          docker build -q -t social-gateway:ci -f src/Gateway/Dockerfile .
 
   infra:
     runs-on: ubuntu-latest

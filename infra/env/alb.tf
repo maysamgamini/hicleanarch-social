@@ -10,18 +10,20 @@ resource "aws_lb" "api" {
   enable_deletion_protection = false
 }
 
-resource "aws_lb_target_group" "api" {
-  name                 = "${var.project}-api"
+# The gateway's tasks (s3-l14): every public request goes through the gateway, which forwards it to
+# the monolith's tasks by their private addresses (service discovery, gateway.tf).
+resource "aws_lb_target_group" "gateway" {
+  name                 = "${var.project}-gateway"
   port                 = 8080
   protocol             = "HTTP"
   target_type          = "ip"
   vpc_id               = aws_vpc.main.id
   deregistration_delay = 30
 
-  # The live check never touches the database: ECS replaces a task whose target-group check fails,
-  # and a check that tested the database would fail every task at once during a failover.
+  # The gateway's own check: it touches neither the monolith nor Valkey, so a slow monolith never has
+  # the load balancer take every gateway task out at once.
   health_check {
-    path                = "/health/live"
+    path                = "/gateway/health"
     matcher             = "200"
     interval            = 10
     healthy_threshold   = 2
@@ -36,6 +38,6 @@ resource "aws_lb_listener" "http" {
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.api.arn
+    target_group_arn = aws_lb_target_group.gateway.arn
   }
 }

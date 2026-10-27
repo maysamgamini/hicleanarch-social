@@ -73,6 +73,22 @@ resource "aws_ecr_repository" "api" {
   }
 }
 
+# The gateway's image (s3-l14), the same rules.
+resource "aws_ecr_repository" "gateway" {
+  name                 = "${var.project}/gateway"
+  image_tag_mutability = "IMMUTABLE"
+  force_delete         = true
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+}
+
+resource "aws_ecr_lifecycle_policy" "gateway" {
+  repository = aws_ecr_repository.gateway.name
+  policy     = aws_ecr_lifecycle_policy.api.policy
+}
+
 resource "aws_ecr_lifecycle_policy" "api" {
   repository = aws_ecr_repository.api.name
   policy = jsonencode({

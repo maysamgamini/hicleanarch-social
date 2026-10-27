@@ -49,6 +49,11 @@ jobs:
           docker build -t "$image" .
           docker push "$image"
           echo "image=$image" >> "$GITHUB_OUTPUT"
+          # The gateway's own image (s3-l14), with the same tag.
+          gateway="$REGISTRY/hicleanarch-social/gateway:${GITHUB_SHA}"
+          docker build -t "$gateway" -f src/Gateway/Dockerfile .
+          docker push "$gateway"
+          echo "TF_VAR_gateway_image=$gateway" >> "$GITHUB_ENV"
 
       # The database is migrated before any task runs the new image: the first apply keeps the
       # service on the image it runs now (none in a new environment), the second moves it.

@@ -61,6 +61,12 @@ mock_provider "aws" {
     }
   }
 
+  mock_resource "aws_service_discovery_service" {
+    defaults = {
+      arn = "arn:aws:servicediscovery:us-east-1:123456789012:service/srv-mock"
+    }
+  }
+
   mock_resource "aws_neptune_cluster" {
     defaults = {
       endpoint        = "graph.cluster-mock.us-east-1.neptune.amazonaws.com"
@@ -270,7 +276,7 @@ run "one_image_two_roles_two_services_each_scaling_on_its_own" {
   }
 
   assert {
-    condition     = aws_appautoscaling_policy.web_requests[0].target_tracking_scaling_policy_configuration[0].predefined_metric_specification[0].predefined_metric_type == "ALBRequestCountPerTarget" && aws_appautoscaling_policy.worker_cpu[0].target_tracking_scaling_policy_configuration[0].predefined_metric_specification[0].predefined_metric_type == "ECSServiceAverageCPUUtilization"
+    condition     = aws_appautoscaling_policy.web_cpu[0].target_tracking_scaling_policy_configuration[0].predefined_metric_specification[0].predefined_metric_type == "ECSServiceAverageCPUUtilization" && aws_appautoscaling_policy.worker_cpu[0].target_tracking_scaling_policy_configuration[0].predefined_metric_specification[0].predefined_metric_type == "ECSServiceAverageCPUUtilization"
     error_message = "Each role scales on its own signal."
   }
 }
@@ -337,5 +343,33 @@ run "the_suggestion_walks_go_to_a_neptune_reader" {
   assert {
     condition     = length(aws_neptune_cluster_instance.graph_reader) == 1 && strcontains(aws_ecs_task_definition.api.container_definitions, "bolt+s://graph.cluster-ro-mock.us-east-1.neptune.amazonaws.com:8182")
     error_message = "One reader instance, and the program walks the graph through the reader endpoint."
+  }
+}
+
+run "every_public_request_goes_through_the_gateway" {
+  command = apply
+
+  variables {
+    gateway_image = "123456789012.dkr.ecr.us-east-1.amazonaws.com/hicleanarch-social/gateway:test"
+  }
+
+  assert {
+    condition     = aws_lb_listener.http.default_action[0].target_group_arn == aws_lb_target_group.gateway.arn && length(aws_ecs_service.gateway[0].load_balancer) == 1
+    error_message = "The load balancer sends every request to the gateway."
+  }
+
+  assert {
+    condition     = length(aws_ecs_service.api[0].load_balancer) == 0 && length(aws_ecs_service.api[0].service_registries) == 1
+    error_message = "The monolith's web tasks are reached through the gateway only, by name."
+  }
+
+  assert {
+    condition     = strcontains(aws_ecs_task_definition.gateway.container_definitions, "http://api.social.internal:8080/") && strcontains(aws_ecs_task_definition.gateway.container_definitions, "ConnectionStrings__ValkeyShort")
+    error_message = "The gateway forwards to the monolith by its private name and counts its limits in the short-lived store."
+  }
+
+  assert {
+    condition     = aws_appautoscaling_policy.gateway_requests[0].target_tracking_scaling_policy_configuration[0].predefined_metric_specification[0].predefined_metric_type == "ALBRequestCountPerTarget"
+    error_message = "The gateway scales on the requests each task forwards."
   }
 }

@@ -28,6 +28,8 @@
     <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.20.0" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.20.0" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.20.0" />
+    <!-- MIT: the gateway (s3-l14) -->
+    <PackageVersion Include="Yarp.ReverseProxy" Version="2.3.0" />
     <!-- MIT; the client speaks to Valkey (BSD-3) -->
     <PackageVersion Include="StackExchange.Redis" Version="3.4.5" />
   </ItemGroup>

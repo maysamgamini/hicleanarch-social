@@ -86,3 +86,21 @@ variable "graph_readers" {
   type        = number
   default     = 1
 }
+
+variable "gateway_image" {
+  description = "The gateway's image (src/Gateway/Dockerfile). Empty: no gateway service yet."
+  type        = string
+  default     = ""
+}
+
+variable "gateway_count" {
+  description = "How many gateway tasks run at first; autoscaling owns the count afterwards."
+  type        = number
+  default     = 2
+}
+
+variable "max_gateway_count" {
+  description = "The most gateway tasks autoscaling may run."
+  type        = number
+  default     = 6
+}

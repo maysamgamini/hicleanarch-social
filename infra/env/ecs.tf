@@ -133,10 +133,9 @@ resource "aws_ecs_service" "api" {
     assign_public_ip = true
   }
 
-  load_balancer {
-    target_group_arn = aws_lb_target_group.api.arn
-    container_name   = "api"
-    container_port   = 8080
+  # Not behind the load balancer since s3-l14: the gateway finds the tasks by name (gateway.tf).
+  service_registries {
+    registry_arn = aws_service_discovery_service.api.arn
   }
 
   deployment_circuit_breaker {
