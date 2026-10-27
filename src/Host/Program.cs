@@ -41,6 +41,9 @@ if (args.FirstOrDefault() == "token")
 
 builder.Logging.AddTraceCorrelatedConsole();
 
+// One image, two roles: Host:Role is Web (requests only), Worker (background work only) or All.
+var role = HostRoles.Read(builder.Configuration);
+
 // The API speaks snake_case JSON: display_name, account_id.
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower);
 builder.Services.AddProblemDetails();
@@ -65,6 +68,7 @@ builder.Services.AddPostsModule(builder.Configuration);
 builder.Services.AddTimelineModule(builder.Configuration);
 builder.Services.AddRecommendationsModule(builder.Configuration);
 builder.Services.AddNotificationsModule(builder.Configuration);
+builder.Services.ApplyRole(role);
 
 var app = builder.Build();
 
@@ -84,13 +88,17 @@ app.UseStatusCodePages();
 app.UseAuthentication();
 app.UseAuthorization();
 
+// Readiness and liveness on every task; the public API only where requests are served.
 app.MapHealth();
-app.MapAccountsEndpoints();
-app.MapRelationshipsEndpoints();
-app.MapPostsEndpoints();
-app.MapTimelineEndpoints();
-app.MapRecommendationsEndpoints();
-app.MapNotificationsEndpoints();
+if (role.ServesRequests())
+{
+    app.MapAccountsEndpoints();
+    app.MapRelationshipsEndpoints();
+    app.MapPostsEndpoints();
+    app.MapTimelineEndpoints();
+    app.MapRecommendationsEndpoints();
+    app.MapNotificationsEndpoints();
+}
 
 await app.RunAsync();
 

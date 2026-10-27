@@ -3,7 +3,8 @@ resource "aws_ecs_cluster" "main" {
 }
 
 locals {
-  api_service = "api"
+  api_service    = "api"
+  worker_service = "worker"
 
   # The running program gets only the modules' connection strings; the owner's goes to the
   # migration task alone.
@@ -34,6 +35,7 @@ locals {
       { name = "ForwardedHeaders__KnownNetwork", value = aws_vpc.main.cidr_block },
       { name = "Graph__Uri", value = local.graph_uri },
       { name = "Graph__Auth", value = "none" },
+      { name = "Host__Role", value = "Web" },
     ]
     # SIGTERM, then this many seconds to finish requests, then SIGKILL.
     stopTimeout = 30
@@ -138,5 +140,61 @@ resource "aws_ecs_service" "api" {
     rollback = true
   }
 
+  # Autoscaling owns the task count once the service exists (autoscaling.tf).
+  lifecycle {
+    ignore_changes = [desired_count]
+  }
+
   depends_on = [aws_lb_listener.http]
+}
+
+# The same image as a worker: Host__Role=Worker runs event delivery, jobs and recovery passes and
+# serves nothing but its health checks, so it has no port in the load balancer.
+locals {
+  worker_container = merge(local.api_container, {
+    name         = "worker"
+    image        = coalesce(var.service_image, var.image)
+    portMappings = []
+    environment  = [for e in local.api_container.environment : e.name == "Host__Role" ? { name = "Host__Role", value = "Worker" } : e]
+  })
+}
+
+resource "aws_ecs_task_definition" "worker" {
+  family                   = "${var.project}-worker"
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = 512
+  memory                   = 1024
+  execution_role_arn       = aws_iam_role.execution.arn
+  task_role_arn            = aws_iam_role.task.arn
+  container_definitions    = jsonencode([local.worker_container, local.collector_container])
+
+  runtime_platform {
+    operating_system_family = "LINUX"
+    cpu_architecture        = "X86_64"
+  }
+}
+
+resource "aws_ecs_service" "worker" {
+  count           = var.service_image == "" ? 0 : 1
+  name            = local.worker_service
+  cluster         = aws_ecs_cluster.main.id
+  task_definition = aws_ecs_task_definition.worker.arn
+  desired_count   = var.worker_count
+  launch_type     = "FARGATE"
+
+  network_configuration {
+    subnets          = aws_subnet.public[*].id
+    security_groups  = [aws_security_group.tasks.id]
+    assign_public_ip = true
+  }
+
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
+
+  lifecycle {
+    ignore_changes = [desired_count]
+  }
 }

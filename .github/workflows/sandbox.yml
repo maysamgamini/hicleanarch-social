@@ -34,9 +34,9 @@ jobs:
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-      - uses: opentofu/setup-opentofu@592200bd4b9bbf4772ace78f887668b1aee8f716 # v1.0.5
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
         with:
-          tofu_wrapper: false
+          terraform_wrapper: false
       - id: ecr
         uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
 
@@ -58,13 +58,13 @@ jobs:
           STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
         run: |
           echo "TF_VAR_image=$IMAGE" >> "$GITHUB_ENV"
-          tofu -chdir=infra/env init -input=false -backend-config="bucket=$STATE_BUCKET"
-          current=$(tofu -chdir=infra/env output -raw service_image 2>/dev/null || true)
-          TF_VAR_image="$IMAGE" tofu -chdir=infra/env apply -input=false -auto-approve -var "service_image=$current"
+          terraform -chdir=infra/env init -input=false -backend-config="bucket=$STATE_BUCKET"
+          current=$(terraform -chdir=infra/env output -raw service_image 2>/dev/null || true)
+          TF_VAR_image="$IMAGE" terraform -chdir=infra/env apply -input=false -auto-approve -var "service_image=$current"
 
       - name: Migrate
         run: |
-          out() { tofu -chdir=infra/env output -raw "$1"; }
+          out() { terraform -chdir=infra/env output -raw "$1"; }
           task=$(aws ecs run-task --cluster "$(out cluster)" --launch-type FARGATE \
             --task-definition "$(out migrate_task_definition)" \
             --network-configuration "awsvpcConfiguration={subnets=[$(out task_subnets)],securityGroups=[$(out task_security_group)],assignPublicIp=ENABLED}" \
@@ -75,15 +75,15 @@ jobs:
 
       - name: Roll the service onto the new image
         run: |
-          tofu -chdir=infra/env apply -input=false -auto-approve -var "service_image=$TF_VAR_image"
-          aws ecs wait services-stable --cluster "$(tofu -chdir=infra/env output -raw cluster)" \
-            --services "$(tofu -chdir=infra/env output -raw service)"
+          terraform -chdir=infra/env apply -input=false -auto-approve -var "service_image=$TF_VAR_image"
+          aws ecs wait services-stable --cluster "$(terraform -chdir=infra/env output -raw cluster)" \
+            --services "$(terraform -chdir=infra/env output -raw service)" "$(terraform -chdir=infra/env output -raw worker_service)"
 
       - name: Sign in a test user
         id: user
         run: |
-          pool=$(tofu -chdir=infra/env output -raw user_pool_id)
-          client=$(tofu -chdir=infra/env output -raw user_pool_client_id)
+          pool=$(terraform -chdir=infra/env output -raw user_pool_id)
+          client=$(terraform -chdir=infra/env output -raw user_pool_client_id)
           email="smoke-${GITHUB_RUN_ID}@example.com"
           password="Smoke-${GITHUB_RUN_ID}-$(openssl rand -hex 8)"
           aws cognito-idp admin-create-user --user-pool-id "$pool" --username "$email" --message-action SUPPRESS >/dev/null
@@ -96,7 +96,7 @@ jobs:
       - name: Smoke test
         env:
           TOKEN: ${{ steps.user.outputs.token }}
-        run: ./scripts/smoke.sh "$(tofu -chdir=infra/env output -raw api_url)"
+        run: ./scripts/smoke.sh "$(terraform -chdir=infra/env output -raw api_url)"
 
       - name: Keep it up for a while
         if: inputs.keep_minutes != '0'
@@ -111,6 +111,6 @@ jobs:
         env:
           STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
         run: |
-          tofu -chdir=infra/env init -input=false -backend-config="bucket=$STATE_BUCKET"
-          tofu -chdir=infra/env destroy -input=false -auto-approve
+          terraform -chdir=infra/env init -input=false -backend-config="bucket=$STATE_BUCKET"
+          terraform -chdir=infra/env destroy -input=false -auto-approve
 

@@ -43,6 +43,16 @@ public sealed class OutboxOptions
     public TimeSpan RedeliverAfter { get; set; } = TimeSpan.FromMinutes(2);
 
     /// <summary>
+    /// For a worker task, whose events were committed by other tasks: every <see cref="PollEvery"/>
+    /// the sweep hands on every undelivered row, however young, instead of waiting for
+    /// <see cref="RedeliverAfter"/>. Two workers may then deliver one row; every handler is safe to
+    /// repeat (an inbox, or idempotent by construction).
+    /// </summary>
+    public bool PollCommitted { get; set; }
+
+    public TimeSpan PollEvery { get; set; } = TimeSpan.FromSeconds(1);
+
+    /// <summary>
     /// The most events one task delivers at once. Each delivery holds a connection of the handler's
     /// module and then one of the event's module, from the same pools as the requests (10 a role), so
     /// a batch of thousands of events never takes them all.
@@ -286,7 +296,7 @@ public sealed partial class OutboxDispatcher(
         {
             while (!stoppingToken.IsCancellationRequested)
             {
-                var swept = await SweepOnce(started ? DateTimeOffset.UtcNow - settings.RedeliverAfter : null, stoppingToken);
+                var swept = await SweepOnce(started && !settings.PollCommitted ? DateTimeOffset.UtcNow - settings.RedeliverAfter : null, stoppingToken);
                 if (!started && !swept)
                 {
                     await Task.Delay(Jittered(wait), stoppingToken);
@@ -295,7 +305,7 @@ public sealed partial class OutboxDispatcher(
                 }
 
                 started = true;
-                await Task.Delay(settings.SweepEvery, stoppingToken);
+                await Task.Delay(settings.PollCommitted ? settings.PollEvery : settings.SweepEvery, stoppingToken);
             }
         }
         catch (OperationCanceledException)

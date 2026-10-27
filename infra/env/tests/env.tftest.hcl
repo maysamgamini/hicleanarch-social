@@ -22,13 +22,15 @@ mock_provider "aws" {
 
   mock_resource "aws_lb_target_group" {
     defaults = {
-      arn = "arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/mock/0123456789abcdef"
+      arn        = "arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/mock/0123456789abcdef"
+      arn_suffix = "targetgroup/mock/0123456789abcdef"
     }
   }
 
   mock_resource "aws_lb" {
     defaults = {
-      arn = "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/mock/0123456789abcdef"
+      arn        = "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/mock/0123456789abcdef"
+      arn_suffix = "app/mock/0123456789abcdef"
     }
   }
 
@@ -230,5 +232,29 @@ run "neptune_is_serverless_destroyable_and_reached_from_the_tasks_only_over_tls"
   assert {
     condition     = startswith(local.graph_uri, "bolt+s://") && strcontains(aws_ecs_task_definition.api.container_definitions, "Graph__Uri")
     error_message = "The program reaches Neptune over Bolt with TLS."
+  }
+}
+
+run "one_image_two_roles_two_services_each_scaling_on_its_own" {
+  command = apply
+
+  assert {
+    condition     = strcontains(aws_ecs_task_definition.api.container_definitions, "\"Web\"") && strcontains(aws_ecs_task_definition.worker.container_definitions, "\"Worker\"")
+    error_message = "The web service runs Host__Role=Web, the worker service Host__Role=Worker."
+  }
+
+  assert {
+    condition     = jsondecode(aws_ecs_task_definition.api.container_definitions)[0].image == jsondecode(aws_ecs_task_definition.worker.container_definitions)[0].image
+    error_message = "Both roles run one image."
+  }
+
+  assert {
+    condition     = length(aws_ecs_service.worker[0].load_balancer) == 0 && length(jsondecode(aws_ecs_task_definition.worker.container_definitions)[0].portMappings) == 0
+    error_message = "A worker takes no traffic: no port, no load balancer."
+  }
+
+  assert {
+    condition     = aws_appautoscaling_policy.web_requests[0].target_tracking_scaling_policy_configuration[0].predefined_metric_specification[0].predefined_metric_type == "ALBRequestCountPerTarget" && aws_appautoscaling_policy.worker_cpu[0].target_tracking_scaling_policy_configuration[0].predefined_metric_specification[0].predefined_metric_type == "ECSServiceAverageCPUUtilization"
+    error_message = "Each role scales on its own signal."
   }
 }

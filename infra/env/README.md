@@ -11,9 +11,9 @@ window. Passwords are ephemeral and sent only to write-only arguments, so they n
 ## Checked offline
 
 ```bash
-tofu -chdir=infra/env init -backend=false
-tofu -chdir=infra/env validate
-tofu -chdir=infra/env test           # mock providers: no account, no credentials
+terraform -chdir=infra/env init -backend=false
+terraform -chdir=infra/env validate
+terraform -chdir=infra/env test           # mock providers: no account, no credentials
 scripts/moto-apply.sh                # applies network, load balancer, secrets, Cognito, logs and IAM to Moto, then destroys them
 ```
 

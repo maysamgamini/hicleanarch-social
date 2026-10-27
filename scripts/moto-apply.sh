@@ -2,12 +2,12 @@
 # Applies the infra/env resources that Moto implements against a local Moto container, checks
 # them, then destroys them. No AWS account is involved: the provider's endpoints point at Moto,
 # and the access key is a placeholder Moto accepts.
-#   scripts/moto-apply.sh                  (OpenTofu; TF=terraform to use another binary)
+#   scripts/moto-apply.sh                  (TF=<path> to use another terraform binary)
 # Moto does not implement Aurora Serverless v2 scaling or every ECS detail, so database.tf and
 # ecs.tf are covered by the mock-provider tests (infra/env/tests) only.
 set -euo pipefail
 
-TF=${TF:-tofu}
+TF=${TF:-terraform}
 here=$(cd "$(dirname "$0")/.." && pwd)
 work=$(mktemp -d)
 name="social-moto-$$"

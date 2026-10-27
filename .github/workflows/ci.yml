@@ -46,16 +46,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: opentofu/setup-opentofu@592200bd4b9bbf4772ace78f887668b1aee8f716 # v1.0.5
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
         with:
-          tofu_wrapper: false
+          terraform_wrapper: false
       - name: fmt, validate and test every root, offline
         run: |
-          tofu fmt -check -recursive infra
+          terraform fmt -check -recursive infra
           for dir in infra/bootstrap infra/env; do
-            tofu -chdir="$dir" init -backend=false -input=false
-            tofu -chdir="$dir" validate
-            tofu -chdir="$dir" test
+            terraform -chdir="$dir" init -backend=false -input=false
+            terraform -chdir="$dir" validate
+            terraform -chdir="$dir" test
           done
       - name: Apply what Moto implements, then destroy it
         run: ./scripts/moto-apply.sh

@@ -34,9 +34,27 @@ variable "zone_count" {
 }
 
 variable "desired_count" {
-  description = "How many copies of the program run; each runs every module."
+  description = "How many web tasks run at first; autoscaling owns the count afterwards."
   type        = number
   default     = 2
+}
+
+variable "worker_count" {
+  description = "How many worker tasks run at first; autoscaling owns the count afterwards."
+  type        = number
+  default     = 1
+}
+
+variable "max_web_count" {
+  description = "The most web tasks autoscaling may run."
+  type        = number
+  default     = 6
+}
+
+variable "max_worker_count" {
+  description = "The most worker tasks autoscaling may run."
+  type        = number
+  default     = 4
 }
 
 variable "aurora_engine_version" {

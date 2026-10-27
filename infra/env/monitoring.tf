@@ -5,7 +5,7 @@
 locals {
   metrics_namespace = "ECS/AWSOTel/Application"
 
-  # Every metric the program emits that an alarm or the dashboard may name; the tofu test checks
+  # Every metric the program emits that an alarm or the dashboard may name; the terraform test checks
   # every alarm against this list.
   metrics = toset([
     "social.posts.stored",
