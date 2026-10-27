@@ -23,6 +23,71 @@ namespace Timeline.Infrastructure.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Timeline.Infrastructure.Persistence.FanoutJobRow", b =>
+                {
+                    b.Property<Guid>("PostId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("post_id");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempts");
+
+                    b.Property<long>("Audience")
+                        .HasColumnType("bigint")
+                        .HasColumnName("audience");
+
+                    b.Property<bool>("AuthorDone")
+                        .HasColumnType("boolean")
+                        .HasColumnName("author_done");
+
+                    b.Property<Guid>("AuthorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("author_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("Cursor")
+                        .HasColumnType("uuid")
+                        .HasColumnName("cursor");
+
+                    b.Property<long>("FollowersReached")
+                        .HasColumnType("bigint")
+                        .HasColumnName("followers_reached");
+
+                    b.Property<Guid?>("LeaseToken")
+                        .HasColumnType("uuid")
+                        .HasColumnName("lease_token");
+
+                    b.Property<DateTimeOffset?>("LeaseUntil")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lease_until");
+
+                    b.Property<string>("Pool")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("pool");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("status");
+
+                    b.HasKey("PostId")
+                        .HasName("pk_fanout_jobs");
+
+                    b.HasIndex("Pool", "CreatedAt")
+                        .HasDatabaseName("fanout_jobs_waiting")
+                        .HasFilter("status <> 'DONE'");
+
+                    b.ToTable("fanout_jobs", "timeline");
+                });
+
             modelBuilder.Entity("Timeline.Infrastructure.Persistence.FanoutProgressRow", b =>
                 {
                     b.Property<Guid>("PostId")

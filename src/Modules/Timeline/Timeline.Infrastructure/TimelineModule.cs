@@ -13,6 +13,7 @@ using Relationships.Contracts;
 using Social.BuildingBlocks.Application;
 using Social.BuildingBlocks.Infrastructure;
 using Social.BuildingBlocks.Infrastructure.Events;
+using Social.BuildingBlocks.Infrastructure.Hosting;
 using Social.BuildingBlocks.Infrastructure.Identity;
 using Social.BuildingBlocks.Infrastructure.Persistence;
 using Social.BuildingBlocks.Infrastructure.Valkey;
@@ -41,6 +42,10 @@ public static class TimelineModule
         services.AddDbContext<TimelineDbContext>(db => TimelineDbOptions.Configure((DbContextOptionsBuilder<TimelineDbContext>)db, connectionString));
         services.AddSingleton<IModuleMigrator, TimelineMigrator>();
         services.AddHostedService<TimelineMonitor>();
+        // The fanout's worker loops, in two pools; given back their jobs at a graceful stop.
+        services.AddSingleton<FanoutWorkers>();
+        services.AddHostedService(sp => sp.GetRequiredService<FanoutWorkers>());
+        services.AddSingleton<IStopParticipant>(sp => sp.GetRequiredService<FanoutWorkers>());
         services.AddSingleton(new ModuleDatabase("Timeline", TimelineDbContext.Schema, connectionString));
         var keys = configuration.GetSection("Timeline:Cursor:Keys");
         services.AddSingleton(new FeedCursors(new CursorKeys(
@@ -62,6 +67,8 @@ public static class TimelineModule
             .AddScoped<IFollowing, InProcessFollowing>()
             .AddScoped<IHiddenAuthors, InProcessHiddenAuthors>()
             .AddScoped<IFanoutProgress, SqlFanoutProgress>()
+            .AddScoped<IFanoutJobs, SqlFanoutJobs>()
+            .AddScoped<IAudience, InProcessAudience>()
             .AddSingleton<ISeenPosts, SampledSeenPosts>();
     }
 

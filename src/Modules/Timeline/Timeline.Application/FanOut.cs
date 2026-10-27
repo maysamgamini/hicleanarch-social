@@ -3,49 +3,116 @@ using Microsoft.Extensions.DependencyInjection;
 using Social.BuildingBlocks.Application;
 using Social.BuildingBlocks.Domain;
 
+using Timeline.Domain;
+
 namespace Timeline.Application;
 
-/// <summary>A stored post goes to the existing timelines of its author and of every follower.</summary>
-public sealed record FanOut(Guid PostId, Guid AuthorId, DateTimeOffset StoredAt) : ICommand<FanOutResult>;
+/// <summary>A stored post's fanout is recorded as a job; worker tasks write it a page at a time.</summary>
+public sealed record StartFanout(Guid PostId, Guid AuthorId, DateTimeOffset StoredAt) : ICommand<FanoutPool>;
 
-public sealed record FanOutResult(int FollowersPaged, int TimelinesWritten);
+/// <summary>A fanout job as a worker holds it: where it stands, and the lease that makes it this worker's.</summary>
+public sealed record FanoutJob(Guid PostId, Guid AuthorId, FanoutPool Pool, Guid? Cursor, bool AuthorDone, long Reached, Guid LeaseToken);
 
 /// <summary>
-/// Fanout on write: the author's followers are read 1,000 at a time and each page is written to
-/// Valkey before the next is read, so memory stays flat for any audience. Running it twice for the
-/// same post changes nothing: the second add finds the member already there.
+/// The durable fanout jobs, in Timeline's own schema. A job is claimed with a lease; every step moves
+/// it only while the lease is still the caller's, so two workers never write the same page at once,
+/// and a worker that dies leaves a job the next one takes up from its last confirmed page.
 /// </summary>
-public sealed class FanOutHandler(ITimelines timelines, IFollowerPages followers, IFanoutProgress progress, TimeProvider clock)
-    : ICommandHandler<FanOut, FanOutResult>
+public interface IFanoutJobs
 {
-    public const int PageSize = 1_000;
+    /// <summary>Creates the job, unless the post already has one (a redelivered PostPublished).</summary>
+    Task Create(Guid postId, Guid authorId, long audience, FanoutPool pool, CancellationToken cancellationToken);
 
-    public async Task<Result<FanOutResult>> Handle(FanOut command, CancellationToken cancellationToken)
+    /// <summary>The oldest job of the pool that nobody holds, now held by the caller for <paramref name="lease"/>.</summary>
+    Task<FanoutJob?> Claim(FanoutPool pool, TimeSpan lease, CancellationToken cancellationToken);
+
+    /// <summary>Records a written page and renews the lease. False: the lease was lost, and the job is someone else's.</summary>
+    Task<bool> Advance(FanoutJob job, TimeSpan lease, CancellationToken cancellationToken);
+
+    /// <summary>Marks the job done. False: the lease was lost.</summary>
+    Task<bool> Finish(FanoutJob job, CancellationToken cancellationToken);
+
+    /// <summary>Gives the job back at once, for the next worker, when this one stops.</summary>
+    Task Release(FanoutJob job, CancellationToken cancellationToken);
+}
+
+/// <summary>How many followers an author has, as the source of truth counts them now.</summary>
+public interface IAudience
+{
+    Task<long> Followers(Guid author, CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// PostPublished becomes a job row (and its progress row) in Timeline's schema; the audience size,
+/// read once here, picks the pool. Creating it twice changes nothing.
+/// </summary>
+public sealed class StartFanoutHandler(IFanoutJobs jobs, IAudience audience, IFanoutProgress progress) : ICommandHandler<StartFanout, FanoutPool>
+{
+    public async Task<Result<FanoutPool>> Handle(StartFanout command, CancellationToken cancellationToken)
     {
-        var record = await progress.Start(command.PostId, command.AuthorId, command.StoredAt, cancellationToken);
-        if (record.FannedOutAt is not null)
+        var size = await audience.Followers(command.AuthorId, cancellationToken);
+        var pool = FanoutPools.For(size);
+        await progress.Start(command.PostId, command.AuthorId, command.StoredAt, cancellationToken);
+        await jobs.Create(command.PostId, command.AuthorId, size, pool, cancellationToken);
+        return Result.Success(pool);
+    }
+}
+
+/// <summary>
+/// One worker's turn: claim a job of its pool, then write it a page at a time (the author first), moving
+/// the cursor only after Valkey has confirmed the page. A page written again after a crash changes
+/// nothing (the add is idempotent); a page is never skipped.
+/// </summary>
+public sealed class FanoutRunner(IFanoutJobs jobs, ITimelines timelines, IFollowerPages followers, IFanoutProgress progress, TimeProvider clock)
+{
+    public static readonly TimeSpan DefaultLease = TimeSpan.FromSeconds(30);
+
+    /// <summary>Runs one job to its end, or until its lease is lost. False when the pool had no job to give.</summary>
+    public async Task<bool> RunOne(FanoutPool pool, TimeSpan lease, Action<FanoutJob>? holding, CancellationToken cancellationToken)
+    {
+        var job = await jobs.Claim(pool, lease, cancellationToken);
+        if (job is null)
         {
-            return Result.Success(new FanOutResult((int)record.FollowersReached, 0)); // delivered again after it completed
+            return false;
         }
 
-        // The author reads their own post in their own feed.
-        var written = await timelines.AddToExisting([command.AuthorId], command.PostId, cancellationToken);
-        var paged = 0;
-        Guid? after = null;
-        do
+        holding?.Invoke(job);
+        if (!job.AuthorDone)
         {
-            var (page, next) = await followers.Page(command.AuthorId, after, PageSize, cancellationToken);
-            paged += page.Count;
-            written += await timelines.AddToExisting(page, command.PostId, cancellationToken);
-            await progress.Reached(command.PostId, paged, cancellationToken);
-            after = next;
+            // The author reads their own post in their own feed.
+            await timelines.AddToExisting([job.AuthorId], job.PostId, cancellationToken);
+            job = job with { AuthorDone = true };
+            if (!await jobs.Advance(job, lease, cancellationToken))
+            {
+                return true;
+            }
         }
-        while (after is not null);
 
-        // Fanned out: the last existing follower timeline has the post.
-        await progress.Complete(command.PostId, clock.GetUtcNow(), cancellationToken);
+        while (true)
+        {
+            var (page, next) = await followers.Page(job.AuthorId, job.Cursor, FanoutPools.PageSize, cancellationToken);
+            await timelines.AddToExisting(page, job.PostId, cancellationToken);
+            job = job with { Cursor = next ?? (page.Count > 0 ? page[^1] : job.Cursor), Reached = job.Reached + page.Count };
+            holding?.Invoke(job);
+            if (next is null)
+            {
+                if (await jobs.Finish(job, cancellationToken))
+                {
+                    // Fanned out: the last existing follower timeline has the post.
+                    await progress.Reached(job.PostId, job.Reached, cancellationToken);
+                    await progress.Complete(job.PostId, clock.GetUtcNow(), cancellationToken);
+                }
 
-        return Result.Success(new FanOutResult(paged, written));
+                return true;
+            }
+
+            if (!await jobs.Advance(job, lease, cancellationToken))
+            {
+                return true; // the lease ran out; the job is another worker's now
+            }
+
+            await progress.Reached(job.PostId, job.Reached, cancellationToken);
+        }
     }
 }
 
@@ -53,7 +120,8 @@ public static class TimelineApplication
 {
     public static IServiceCollection AddTimelineApplication(this IServiceCollection services) =>
         services
-            .AddScoped<ICommandHandler<FanOut, FanOutResult>, FanOutHandler>()
+            .AddScoped<ICommandHandler<StartFanout, FanoutPool>, StartFanoutHandler>()
+            .AddScoped<FanoutRunner>()
             .AddScoped<IQueryHandler<ReadFeed, FeedPage>, ReadFeedHandler>()
             .AddScoped<ICommandHandler<RemoveAuthor, int>, RemoveAuthorHandler>()
             .AddScoped<ICommandHandler<AddRecentPosts, int>, AddRecentPostsHandler>()

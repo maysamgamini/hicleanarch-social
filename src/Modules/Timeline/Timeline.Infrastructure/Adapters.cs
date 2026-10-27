@@ -22,12 +22,12 @@ internal sealed class InProcessFollowerPages(IDispatcher dispatcher) : IFollower
     }
 }
 
-/// <summary>Turns Posts' PostPublished into Timeline's own command; the use case never sees Posts' types.</summary>
+/// <summary>Turns Posts' PostPublished into Timeline's own command (a fanout job); the use case never sees Posts' types.</summary>
 internal sealed class FanOutOnPostPublished(IDispatcher dispatcher) : IIntegrationEventHandler<PostPublished>
 {
     public async Task Handle(PostPublished integrationEvent, CancellationToken cancellationToken)
     {
-        var result = await dispatcher.Send<FanOut, FanOutResult>(new FanOut(integrationEvent.PostId, integrationEvent.AuthorId, integrationEvent.CreatedAt), cancellationToken);
+        var result = await dispatcher.Send<StartFanout, Timeline.Domain.FanoutPool>(new StartFanout(integrationEvent.PostId, integrationEvent.AuthorId, integrationEvent.CreatedAt), cancellationToken);
         if (!result.IsSuccess)
         {
             throw new InvalidOperationException($"Fanout of {integrationEvent.PostId} failed: {result.Errors[0].Code}");
@@ -111,5 +111,15 @@ internal sealed class TimelineUpkeep(IDispatcher dispatcher) :
         {
             throw new InvalidOperationException(result.Errors[0].Code);
         }
+    }
+}
+
+/// <summary>Timeline's IAudience answered in process by Relationships' GetCounts.</summary>
+internal sealed class InProcessAudience(IDispatcher dispatcher) : IAudience
+{
+    public async Task<long> Followers(Guid author, CancellationToken cancellationToken)
+    {
+        var counts = await dispatcher.Query<GetCounts, RelationshipCounts>(new GetCounts(author), cancellationToken);
+        return counts.IsSuccess ? counts.Value.Followers : throw new InvalidOperationException(counts.Errors[0].Code);
     }
 }

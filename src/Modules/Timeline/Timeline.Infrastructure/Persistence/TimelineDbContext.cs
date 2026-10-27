@@ -20,6 +20,16 @@ internal sealed class TimelineDbContext(DbContextOptions<TimelineDbContext> opti
             // Stored but not yet fanned out: what the s2-l19 gauge counts.
             progress.HasIndex(p => p.StoredAt).HasFilter("completed_at IS NULL").HasDatabaseName("fanout_progress_open");
         });
+
+        modelBuilder.Entity<FanoutJobRow>(job =>
+        {
+            job.ToTable("fanout_jobs");
+            job.HasKey(j => j.PostId);
+            job.Property(j => j.Pool).HasMaxLength(10);
+            job.Property(j => j.Status).HasMaxLength(10);
+            // What a worker of a pool looks for: the oldest job not done.
+            job.HasIndex(j => new { j.Pool, j.CreatedAt }).HasFilter("status <> 'DONE'").HasDatabaseName("fanout_jobs_waiting");
+        });
     }
 }
 
@@ -34,6 +44,37 @@ internal sealed class FanoutProgressRow
     public long FollowersReached { get; set; }
 
     public DateTimeOffset? CompletedAt { get; set; }
+}
+
+/// <summary>
+/// One post's fanout as a durable job: the next follower to write after (the cursor), the lease of the
+/// worker that holds it, and its status (WAITING, RUNNING, DONE).
+/// </summary>
+internal sealed class FanoutJobRow
+{
+    public Guid PostId { get; set; }
+
+    public Guid AuthorId { get; set; }
+
+    public long Audience { get; set; }
+
+    public required string Pool { get; set; }
+
+    public required string Status { get; set; }
+
+    public Guid? Cursor { get; set; }
+
+    public bool AuthorDone { get; set; }
+
+    public long FollowersReached { get; set; }
+
+    public Guid? LeaseToken { get; set; }
+
+    public DateTimeOffset? LeaseUntil { get; set; }
+
+    public int Attempts { get; set; }
+
+    public DateTimeOffset CreatedAt { get; set; }
 }
 
 internal static class TimelineDbOptions
