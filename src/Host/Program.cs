@@ -5,6 +5,7 @@ using Accounts.Infrastructure;
 using Relationships.Infrastructure;
 
 using Social.BuildingBlocks.Application;
+using Social.BuildingBlocks.Infrastructure.Events;
 using Social.BuildingBlocks.Infrastructure.Hosting;
 using Social.BuildingBlocks.Infrastructure.Identity;
 using Social.BuildingBlocks.Infrastructure.Persistence;
@@ -43,6 +44,8 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddTelemetry(builder.Configuration);
 // Cognito's tokens when Auth:Authority is set (on AWS); the local issuer's otherwise (development, tests).
 builder.Services.AddTokenAuthentication(builder.Configuration);
+// Events between modules: the outboxes, the in-process bus and the background dispatcher.
+builder.Services.AddInProcessEvents();
 builder.Services.AddProxyHeaders(builder.Configuration);
 builder.Services.AddGracefulStop();
 builder.Services.AddHealth(builder.Configuration);

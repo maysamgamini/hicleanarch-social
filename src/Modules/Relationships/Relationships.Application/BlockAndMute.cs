@@ -28,7 +28,9 @@ public sealed record Unmute(Guid MuterId, Guid MutedId) : ICommand<MuteState>;
 public sealed class BlockHandler(
     IRelationshipStore store,
     IAccountDirectory accounts,
-    [FromKeyedServices(ModuleName.Value)] ITransactionScope transaction) : ICommandHandler<Block, BlockState>
+    TimeProvider clock,
+    [FromKeyedServices(ModuleName.Value)] ITransactionScope transaction,
+    [FromKeyedServices(ModuleName.Value)] IOutbox outbox) : ICommandHandler<Block, BlockState>
 {
     public async Task<Result<BlockState>> Handle(Block command, CancellationToken cancellationToken)
     {
@@ -46,14 +48,24 @@ public sealed class BlockHandler(
         {
             var pair = await store.LockPair(command.BlockerId, command.BlockedId, ct);
             var outcome = pair.Block(command.BlockerId, command.BlockedId);
+            var now = clock.GetUtcNow();
+            var events = new List<IntegrationEvent>();
             foreach (var follow in outcome.RemovedFollows)
             {
                 await store.RemoveFollow(follow.From, follow.To, ct);
+                // Every listener hears that the follow ended, with the block's version.
+                events.Add(new FollowEnded(Guid.CreateVersion7(), now, follow.From, follow.To, pair.Version));
             }
 
             if (outcome.Block == Change.Added)
             {
                 await store.Add(EdgeKind.Block, command.BlockerId, command.BlockedId, ct);
+                events.Add(new AccountBlocked(Guid.CreateVersion7(), now, command.BlockerId, command.BlockedId, pair.Version));
+            }
+
+            if (events.Count > 0)
+            {
+                await outbox.AddRange(events, ct);
             }
 
             return Result.Success(new BlockState(command.BlockedId, Blocking: true));
@@ -63,7 +75,9 @@ public sealed class BlockHandler(
 
 public sealed class UnblockHandler(
     IRelationshipStore store,
-    [FromKeyedServices(ModuleName.Value)] ITransactionScope transaction) : ICommandHandler<Unblock, BlockState>
+    TimeProvider clock,
+    [FromKeyedServices(ModuleName.Value)] ITransactionScope transaction,
+    [FromKeyedServices(ModuleName.Value)] IOutbox outbox) : ICommandHandler<Unblock, BlockState>
 {
     public Task<Result<BlockState>> Handle(Unblock command, CancellationToken cancellationToken) =>
         transaction.Run(async ct =>
@@ -72,6 +86,7 @@ public sealed class UnblockHandler(
             if (pair.Unblock(command.BlockerId, command.BlockedId) == Change.Removed)
             {
                 await store.Remove(EdgeKind.Block, command.BlockerId, command.BlockedId, ct);
+                await outbox.Add(new AccountUnblocked(Guid.CreateVersion7(), clock.GetUtcNow(), command.BlockerId, command.BlockedId, pair.Version), ct);
             }
 
             return Result.Success(new BlockState(command.BlockedId, Blocking: false));
@@ -81,7 +96,9 @@ public sealed class UnblockHandler(
 public sealed class MuteHandler(
     IRelationshipStore store,
     IAccountDirectory accounts,
-    [FromKeyedServices(ModuleName.Value)] ITransactionScope transaction) : ICommandHandler<Mute, MuteState>
+    TimeProvider clock,
+    [FromKeyedServices(ModuleName.Value)] ITransactionScope transaction,
+    [FromKeyedServices(ModuleName.Value)] IOutbox outbox) : ICommandHandler<Mute, MuteState>
 {
     public async Task<Result<MuteState>> Handle(Mute command, CancellationToken cancellationToken)
     {
@@ -101,6 +118,7 @@ public sealed class MuteHandler(
             if (pair.Mute(command.MuterId, command.MutedId) == Change.Added)
             {
                 await store.Add(EdgeKind.Mute, command.MuterId, command.MutedId, ct);
+                await outbox.Add(new AccountMuted(Guid.CreateVersion7(), clock.GetUtcNow(), command.MuterId, command.MutedId, pair.Version), ct);
             }
 
             return Result.Success(new MuteState(command.MutedId, Muting: true));
@@ -110,7 +128,9 @@ public sealed class MuteHandler(
 
 public sealed class UnmuteHandler(
     IRelationshipStore store,
-    [FromKeyedServices(ModuleName.Value)] ITransactionScope transaction) : ICommandHandler<Unmute, MuteState>
+    TimeProvider clock,
+    [FromKeyedServices(ModuleName.Value)] ITransactionScope transaction,
+    [FromKeyedServices(ModuleName.Value)] IOutbox outbox) : ICommandHandler<Unmute, MuteState>
 {
     public Task<Result<MuteState>> Handle(Unmute command, CancellationToken cancellationToken) =>
         transaction.Run(async ct =>
@@ -119,6 +139,7 @@ public sealed class UnmuteHandler(
             if (pair.Unmute(command.MuterId, command.MutedId) == Change.Removed)
             {
                 await store.Remove(EdgeKind.Mute, command.MuterId, command.MutedId, ct);
+                await outbox.Add(new AccountUnmuted(Guid.CreateVersion7(), clock.GetUtcNow(), command.MuterId, command.MutedId, pair.Version), ct);
             }
 
             return Result.Success(new MuteState(command.MutedId, Muting: false));

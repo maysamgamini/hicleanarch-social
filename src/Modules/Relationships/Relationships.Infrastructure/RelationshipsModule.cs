@@ -8,10 +8,12 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 using Relationships.Application;
+using Relationships.Contracts;
 using Relationships.Infrastructure.Persistence;
 
 using Social.BuildingBlocks.Application;
 using Social.BuildingBlocks.Infrastructure;
+using Social.BuildingBlocks.Infrastructure.Events;
 using Social.BuildingBlocks.Infrastructure.Identity;
 using Social.BuildingBlocks.Infrastructure.Persistence;
 
@@ -25,7 +27,17 @@ public static class RelationshipsModule
     {
         var connectionString = configuration.GetConnectionString("Relationships")
             ?? throw new InvalidOperationException("ConnectionStrings:Relationships is not set.");
-        services.AddDbContext<RelationshipsDbContext>(db => RelationshipsDbOptions.Configure((DbContextOptionsBuilder<RelationshipsDbContext>)db, connectionString));
+        // The outbox's events go to the in-process bus right after the transaction that wrote them commits.
+        services.AddDbContext<RelationshipsDbContext>((sp, db) => RelationshipsDbOptions
+            .Configure((DbContextOptionsBuilder<RelationshipsDbContext>)db, connectionString)
+            .AddInterceptors(sp.GetRequiredService<OutboxCommitInterceptor<RelationshipsDbContext>>()));
+        services.AddModuleEvents<RelationshipsDbContext>(ModuleName.Value);
+        services.AddPublishedEvent<FollowStarted>();
+        services.AddPublishedEvent<FollowEnded>();
+        services.AddPublishedEvent<AccountBlocked>();
+        services.AddPublishedEvent<AccountUnblocked>();
+        services.AddPublishedEvent<AccountMuted>();
+        services.AddPublishedEvent<AccountUnmuted>();
         services.AddKeyedScoped<ITransactionScope>(ModuleName.Value, (sp, _) => new ModuleTransaction<RelationshipsDbContext>(sp.GetRequiredService<RelationshipsDbContext>()));
         services.AddSingleton<IModuleMigrator, RelationshipsMigrator>();
         services.AddSingleton(new ModuleDatabase("Relationships", RelationshipsDbContext.Schema, connectionString));

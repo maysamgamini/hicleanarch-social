@@ -55,6 +55,11 @@ public sealed class Account
 
     public Result<Account> UpdateProfile(string? handle, string? displayName, DateTimeOffset now)
     {
+        if (Status == AccountStatus.Deactivated)
+        {
+            return Result.Failure<Account>(AccountErrors.Deactivated);
+        }
+
         var checkedHandle = Handle.Create(handle);
         var checkedName = CheckDisplayName(displayName);
         var errors = checkedHandle.Errors.Concat(checkedName.Errors).ToList();
@@ -68,6 +73,22 @@ public sealed class Account
         UpdatedAt = now;
         return Result.Success(this);
     }
+
+    /// <summary>True when this call deactivated the account; false when it already was.</summary>
+    public bool Deactivate(DateTimeOffset now)
+    {
+        if (Status == AccountStatus.Deactivated)
+        {
+            return false;
+        }
+
+        Status = AccountStatus.Deactivated;
+        UpdatedAt = now;
+        return true;
+    }
+
+    /// <summary>Whether the profile differs from the one given: an update that changes nothing announces nothing.</summary>
+    public bool Differs(Handle handle, string displayName) => Handle.Value != handle.Value || DisplayName != displayName;
 
     private static Result<string> CheckDisplayName(string? displayName)
     {

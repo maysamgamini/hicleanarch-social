@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 
+using Social.BuildingBlocks.Infrastructure.Events;
+
 namespace Relationships.Infrastructure.Persistence;
 
 /// <summary>
@@ -13,6 +15,7 @@ internal sealed class RelationshipsDbContext(DbContextOptions<RelationshipsDbCon
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema(Schema);
+        modelBuilder.MapOutboxAndInbox();
 
         modelBuilder.Entity<FollowRow>(follow =>
         {

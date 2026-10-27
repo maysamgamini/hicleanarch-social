@@ -11,6 +11,7 @@ public static class AccountsApplication
     public static IServiceCollection AddAccountsApplication(this IServiceCollection services) =>
         services
             .AddScoped<ICommandHandler<UpdateMyProfile, ProfileUpdate>, UpdateMyProfileHandler>()
+            .AddScoped<ICommandHandler<DeactivateMe, Profile>, DeactivateMeHandler>()
             .AddScoped<IQueryHandler<GetProfileByHandle, Profile>, GetProfileByHandleHandler>()
             .AddScoped<IQueryHandler<GetProfiles, IReadOnlyList<Profile>>, GetProfilesHandler>();
 }

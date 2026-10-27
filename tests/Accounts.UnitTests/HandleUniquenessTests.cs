@@ -1,4 +1,5 @@
 using Accounts.Application;
+using Accounts.Contracts;
 
 namespace Accounts.UnitTests;
 
@@ -7,7 +8,11 @@ public class HandleUniquenessTests
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    private readonly UpdateMyProfileHandler _handler = new(new InMemoryAccounts(), TimeProvider.System);
+    private readonly RecordingOutbox _outbox = new();
+
+    private readonly UpdateMyProfileHandler _handler;
+
+    public HandleUniquenessTests() => _handler = new(new InMemoryAccounts(), TimeProvider.System, new NoTransaction(), _outbox);
 
     [Fact]
     public async Task A_handle_taken_in_another_case_is_refused()
@@ -54,5 +59,19 @@ public class HandleUniquenessTests
         var taken = await _handler.Handle(new UpdateMyProfile(Guid.NewGuid(), "Barbara", "Another B"), Ct);
 
         Assert.True(taken.IsSuccess);
+    }
+
+    [Fact]
+    public async Task Registering_announces_AccountRegistered_and_an_update_ProfileUpdated_but_a_repeat_nothing()
+    {
+        var me = Guid.NewGuid();
+
+        await _handler.Handle(new UpdateMyProfile(me, "alan", "Alan"), Ct);
+        await _handler.Handle(new UpdateMyProfile(me, "alan", "Alan"), Ct);
+        await _handler.Handle(new UpdateMyProfile(me, "alan_t", "Alan Turing"), Ct);
+
+        Assert.Collection(_outbox.Events,
+            e => Assert.Equal(new { AccountId = me, Handle = "alan" }, new { ((AccountRegistered)e).AccountId, ((AccountRegistered)e).Handle }),
+            e => Assert.Equal("Alan Turing", Assert.IsType<ProfileUpdated>(e).DisplayName));
     }
 }

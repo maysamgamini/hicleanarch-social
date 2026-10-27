@@ -147,6 +147,82 @@ namespace Relationships.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("pair_versions_ordered", "low_id < high_id");
                         });
                 });
+
+            modelBuilder.Entity("Social.BuildingBlocks.Infrastructure.Events.InboxMessage", b =>
+                {
+                    b.Property<string>("Handler")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("handler");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("event_id");
+
+                    b.Property<DateTimeOffset>("HandledAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("handled_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("Handler", "EventId")
+                        .HasName("pk_inbox");
+
+                    b.ToTable("inbox", "relationships");
+                });
+
+            modelBuilder.Entity("Social.BuildingBlocks.Infrastructure.Events.OutboxMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempts");
+
+                    b.Property<DateTimeOffset?>("DeliveredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("delivered_at");
+
+                    b.Property<string>("LastError")
+                        .HasColumnType("text")
+                        .HasColumnName("last_error");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("payload");
+
+                    b.Property<string>("TraceParent")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("trace_parent");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("type");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_outbox");
+
+                    b.HasIndex("OccurredAt")
+                        .HasDatabaseName("outbox_undelivered")
+                        .HasFilter("delivered_at IS NULL");
+
+                    b.ToTable("outbox", "relationships");
+                });
 #pragma warning restore 612, 618
         }
     }

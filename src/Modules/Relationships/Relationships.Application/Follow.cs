@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 
+using Relationships.Contracts;
 using Relationships.Domain;
 
 using Social.BuildingBlocks.Application;
@@ -19,7 +20,9 @@ public sealed record Unfollow(Guid FollowerId, Guid FolloweeId) : ICommand<Follo
 public sealed class FollowHandler(
     IRelationshipStore store,
     IAccountDirectory accounts,
-    [FromKeyedServices(ModuleName.Value)] ITransactionScope transaction) : ICommandHandler<Follow, FollowState>
+    TimeProvider clock,
+    [FromKeyedServices(ModuleName.Value)] ITransactionScope transaction,
+    [FromKeyedServices(ModuleName.Value)] IOutbox outbox) : ICommandHandler<Follow, FollowState>
 {
     public async Task<Result<FollowState>> Handle(Follow command, CancellationToken cancellationToken)
     {
@@ -42,9 +45,14 @@ public sealed class FollowHandler(
                 return Result.Failure<FollowState>(follow.Errors);
             }
 
-            if (follow.Value == Change.Added && !await store.AddFollow(command.FollowerId, command.FolloweeId, ct))
+            if (follow.Value == Change.Added)
             {
-                return Result.Failure<FollowState>(RelationshipErrors.FollowLimit);
+                if (!await store.AddFollow(command.FollowerId, command.FolloweeId, ct))
+                {
+                    return Result.Failure<FollowState>(RelationshipErrors.FollowLimit);
+                }
+
+                await outbox.Add(new FollowStarted(Guid.CreateVersion7(), clock.GetUtcNow(), command.FollowerId, command.FolloweeId, pair.Version), ct);
             }
 
             return Result.Success(new FollowState(command.FolloweeId, Following: true));
@@ -54,7 +62,9 @@ public sealed class FollowHandler(
 
 public sealed class UnfollowHandler(
     IRelationshipStore store,
-    [FromKeyedServices(ModuleName.Value)] ITransactionScope transaction) : ICommandHandler<Unfollow, FollowState>
+    TimeProvider clock,
+    [FromKeyedServices(ModuleName.Value)] ITransactionScope transaction,
+    [FromKeyedServices(ModuleName.Value)] IOutbox outbox) : ICommandHandler<Unfollow, FollowState>
 {
     public Task<Result<FollowState>> Handle(Unfollow command, CancellationToken cancellationToken) =>
         transaction.Run(async ct =>
@@ -63,6 +73,7 @@ public sealed class UnfollowHandler(
             if (pair.Unfollow(command.FollowerId, command.FolloweeId) == Change.Removed)
             {
                 await store.RemoveFollow(command.FollowerId, command.FolloweeId, ct);
+                await outbox.Add(new FollowEnded(Guid.CreateVersion7(), clock.GetUtcNow(), command.FollowerId, command.FolloweeId, pair.Version), ct);
             }
 
             return Result.Success(new FollowState(command.FolloweeId, Following: false));

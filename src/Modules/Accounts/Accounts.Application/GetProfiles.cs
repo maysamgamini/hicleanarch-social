@@ -12,7 +12,10 @@ public sealed class GetProfileByHandleHandler(IAccountRepository accounts) : IQu
     {
         var handle = Domain.Handle.Create(query.Handle);
         var account = handle.IsSuccess ? await accounts.FindByHandle(handle.Value, cancellationToken) : null;
-        return account is null ? Result.Failure<Profile>(AccountErrors.NotFound) : Result.Success(account.ToProfile());
+        // A deactivated account's profile is no longer shown.
+        return account is null || account.Status != AccountStatus.Active
+            ? Result.Failure<Profile>(AccountErrors.NotFound)
+            : Result.Success(account.ToProfile());
     }
 }
 

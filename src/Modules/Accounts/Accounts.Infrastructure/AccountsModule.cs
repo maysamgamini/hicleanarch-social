@@ -13,6 +13,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 using Social.BuildingBlocks.Application;
 using Social.BuildingBlocks.Infrastructure;
+using Social.BuildingBlocks.Infrastructure.Events;
 using Social.BuildingBlocks.Infrastructure.Identity;
 using Social.BuildingBlocks.Infrastructure.Persistence;
 
@@ -29,7 +30,15 @@ public static class AccountsModule
     {
         var connectionString = configuration.GetConnectionString("Accounts")
             ?? throw new InvalidOperationException("ConnectionStrings:Accounts is not set.");
-        services.AddDbContext<AccountsDbContext>(db => AccountsDbOptions.Configure((DbContextOptionsBuilder<AccountsDbContext>)db, connectionString));
+        // The outbox's events go to the in-process bus right after the transaction that wrote them commits.
+        services.AddDbContext<AccountsDbContext>((sp, db) => AccountsDbOptions
+            .Configure((DbContextOptionsBuilder<AccountsDbContext>)db, connectionString)
+            .AddInterceptors(sp.GetRequiredService<OutboxCommitInterceptor<AccountsDbContext>>()));
+        services.AddModuleEvents<AccountsDbContext>(ModuleName.Value);
+        services.AddPublishedEvent<AccountRegistered>();
+        services.AddPublishedEvent<ProfileUpdated>();
+        services.AddPublishedEvent<AccountDeactivated>();
+        services.AddKeyedScoped<ITransactionScope>(ModuleName.Value, (sp, _) => new ModuleTransaction<AccountsDbContext>(sp.GetRequiredService<AccountsDbContext>()));
         services.AddSingleton<IModuleMigrator, AccountsMigrator>();
         services.AddSingleton(new ModuleDatabase("Accounts", AccountsDbContext.Schema, connectionString));
         return services
@@ -51,6 +60,14 @@ public static class AccountsModule
 
             var reply = ProfileReply.From(result.Value.Profile);
             return result.Value.Registered ? Results.Created($"/v1/accounts/{reply.Handle}", reply) : Results.Ok(reply);
+        }).WithTags("Accounts");
+
+        app.MapPost("/v1/me/deactivate", async (ClaimsPrincipal user, IDispatcher dispatcher, CancellationToken ct) =>
+        {
+            var result = await dispatcher.Send<DeactivateMe, Profile>(new DeactivateMe(user.UserId()), ct);
+            return result.IsSuccess
+                ? Results.Ok(new { account_id = result.Value.AccountId, status = result.Value.Active ? "ACTIVE" : "DEACTIVATED" })
+                : result.Errors.ToProblem();
         }).WithTags("Accounts");
 
         // Anyone may read a profile, signed in or not.

@@ -2,6 +2,8 @@ using Accounts.Domain;
 
 using Microsoft.EntityFrameworkCore;
 
+using Social.BuildingBlocks.Infrastructure.Events;
+
 namespace Accounts.Infrastructure.Persistence;
 
 /// <summary>The Accounts module's view of the database: its own schema, and nothing else.</summary>
@@ -17,6 +19,7 @@ internal sealed class AccountsDbContext(DbContextOptions<AccountsDbContext> opti
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema(Schema);
+        modelBuilder.MapOutboxAndInbox();
 
         modelBuilder.Entity<Account>(account =>
         {
