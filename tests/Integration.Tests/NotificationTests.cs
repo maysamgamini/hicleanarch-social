@@ -105,10 +105,11 @@ public sealed class NotificationTests(Postgres postgres) : IntegrationTest(postg
     {
         var bob = await _people.SignUp();
         var fans = await _people.SignUp(3);
-        var start = DateTimeOffset.UtcNow.AddMinutes(-3);
+        // Three different hours: an hour's new followers are one notification (s3-l13).
+        var start = DateTimeOffset.UtcNow.AddHours(-3);
         for (var i = 0; i < fans.Length; i++)
         {
-            await Deliver(new FollowStarted(Guid.CreateVersion7(), start.AddMinutes(i), fans[i], bob, 1));
+            await Deliver(new FollowStarted(Guid.CreateVersion7(), start.AddHours(i), fans[i], bob, 1));
         }
 
         var newestFirst = await Inbox(bob);
@@ -128,10 +129,10 @@ public sealed class NotificationTests(Postgres postgres) : IntegrationTest(postg
     {
         var bob = await _people.SignUp();
         var fans = await _people.SignUp(5);
-        var start = DateTimeOffset.UtcNow.AddMinutes(-5);
+        var start = DateTimeOffset.UtcNow.AddHours(-5);
         for (var i = 0; i < fans.Length; i++)
         {
-            await Deliver(new FollowStarted(Guid.CreateVersion7(), start.AddMinutes(i), fans[i], bob, 1));
+            await Deliver(new FollowStarted(Guid.CreateVersion7(), start.AddHours(i), fans[i], bob, 1));
         }
 
         var first = await _people.As(bob).GetFromJsonAsync<JsonElement>("/v1/notifications?limit=3", Ct);
@@ -142,5 +143,69 @@ public sealed class NotificationTests(Postgres postgres) : IntegrationTest(postg
             .Select(i => i.GetProperty("actor_id").GetGuid());
         Assert.Equal(fans.Reverse(), actors);
         Assert.Equal(JsonValueKind.Null, second.GetProperty("next_before").ValueKind);
+    }
+
+    /// <summary>The start of the hour before this one: a whole hour, over, whatever the time is now.</summary>
+    private static DateTimeOffset LastHour()
+    {
+        var now = DateTimeOffset.UtcNow.AddHours(-1);
+        return new DateTimeOffset(now.Year, now.Month, now.Day, now.Hour, 0, 0, TimeSpan.Zero);
+    }
+
+    private async Task DeliverFollows(Guid followee, int count, DateTimeOffset hour)
+    {
+        foreach (var batch in Enumerable.Range(0, count).Chunk(20))
+        {
+            await Task.WhenAll(batch.Select(i => Deliver(new FollowStarted(Guid.CreateVersion7(), hour.AddSeconds(i * 3), Guid.CreateVersion7(), followee, 1))));
+        }
+    }
+
+    [Fact]
+    public async Task A_thousand_follows_of_one_account_in_an_hour_make_one_notification_row_with_count_1000()
+    {
+        var bob = await _people.SignUp();
+        var hour = LastHour();
+
+        await DeliverFollows(bob, 1_000, hour);
+
+        var only = Assert.Single(await Inbox(bob));
+        Assert.Equal(1_000, only.GetProperty("count").GetInt32());
+        Assert.Equal(3, only.GetProperty("actors").GetArrayLength());
+        Assert.Equal(1L, await Notified(bob));
+    }
+
+    [Fact]
+    public async Task A_duplicate_event_does_not_double_the_count()
+    {
+        var bob = await _people.SignUp();
+        var hour = LastHour();
+        var first = new FollowStarted(Guid.CreateVersion7(), hour, Guid.CreateVersion7(), bob, 1);
+        var second = new FollowStarted(Guid.CreateVersion7(), hour.AddMinutes(1), Guid.CreateVersion7(), bob, 1);
+
+        await Deliver(first);
+        await Deliver(second);
+        await Deliver(second);
+        await Deliver(first);
+
+        Assert.Equal(2, Assert.Single(await Inbox(bob)).GetProperty("count").GetInt32());
+    }
+
+    [Fact]
+    public async Task A_celebritys_new_followers_make_one_summary_an_hour_and_no_message_per_follow()
+    {
+        var star = await _people.SignUp();
+        var sent = _host.Services.GetRequiredService<FakeNotificationSender>().Sent;
+        await Deliver(new FollowerCountChanged(Guid.CreateVersion7(), DateTimeOffset.UtcNow.AddHours(-2), star, 30_000));
+        var hour = LastHour();
+
+        await DeliverFollows(star, 50, hour);
+        Assert.DoesNotContain(sent, s => s.RecipientId == star);
+
+        var summaries = _host.Services.GetRequiredService<HourlySummaries>();
+        await summaries.SendDue(Ct);
+        await summaries.SendDue(Ct); // a second pass sends nothing again
+
+        var summary = Assert.Single(sent, s => s.RecipientId == star);
+        Assert.Equal(50, summary.Count);
     }
 }

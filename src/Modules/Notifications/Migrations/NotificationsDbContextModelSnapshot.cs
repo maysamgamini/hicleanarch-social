@@ -51,6 +51,26 @@ namespace Notifications.Migrations
                     b.ToTable("blocked_actors", "notifications");
                 });
 
+            modelBuilder.Entity("Notifications.FollowerCount", b =>
+                {
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("account_id");
+
+                    b.Property<DateTimeOffset>("At")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("at");
+
+                    b.Property<long>("Followers")
+                        .HasColumnType("bigint")
+                        .HasColumnName("followers");
+
+                    b.HasKey("AccountId")
+                        .HasName("pk_follower_counts");
+
+                    b.ToTable("follower_counts", "notifications");
+                });
+
             modelBuilder.Entity("Notifications.Notification", b =>
                 {
                     b.Property<Guid>("Id")
@@ -61,6 +81,17 @@ namespace Notifications.Migrations
                     b.Property<Guid>("ActorId")
                         .HasColumnType("uuid")
                         .HasColumnName("actor_id");
+
+                    b.PrimitiveCollection<Guid[]>("Actors")
+                        .IsRequired()
+                        .HasColumnType("uuid[]")
+                        .HasColumnName("actors");
+
+                    b.Property<int>("Count")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1)
+                        .HasColumnName("count");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -84,12 +115,36 @@ namespace Notifications.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("subject_id");
 
+                    b.Property<DateTimeOffset?>("SummarizedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("summarized_at");
+
+                    b.Property<bool>("SummaryDue")
+                        .HasColumnType("boolean")
+                        .HasColumnName("summary_due");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<DateTimeOffset>("WindowStart")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("window_start");
+
                     b.HasKey("Id")
                         .HasName("pk_notifications");
+
+                    b.HasIndex("WindowStart")
+                        .HasDatabaseName("notifications_summaries_due")
+                        .HasFilter("summary_due AND summarized_at IS NULL");
 
                     b.HasIndex("RecipientId", "Id")
                         .IsDescending(false, true)
                         .HasDatabaseName("notifications_by_recipient");
+
+                    b.HasIndex("RecipientId", "Kind", "WindowStart")
+                        .IsUnique()
+                        .HasDatabaseName("notifications_one_per_hour");
 
                     b.ToTable("notifications", "notifications");
                 });

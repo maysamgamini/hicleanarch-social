@@ -36,11 +36,14 @@ public static class NotificationsModule
         services.AddEventHandler<FollowStarted, NotificationHandlers>(Name);
         services.AddEventHandler<AccountBlocked, NotificationHandlers>(Name);
         services.AddEventHandler<AccountUnblocked, NotificationHandlers>(Name);
+        services.AddEventHandler<FollowerCountChanged, NotificationHandlers>(Name);
         services.AddSingleton<IModuleMigrator, NotificationsMigrator>();
         services.AddSingleton(new ModuleDatabase(Name, NotificationsDbContext.Schema, connectionString));
         services.AddSingleton<FakeNotificationSender>();
         services.AddSingleton<INotificationSender>(sp => sp.GetRequiredService<FakeNotificationSender>());
         services.AddHostedService<BlockedActorsPurge>();
+        services.AddSingleton<HourlySummaries>();
+        services.AddHostedService(sp => sp.GetRequiredService<HourlySummaries>());
         return services;
     }
 
@@ -53,12 +56,12 @@ public static class NotificationsModule
         {
             var take = Math.Clamp(limit ?? 20, 1, 100);
             var page = await db.Read($"""
-                SELECT id, kind, actor_id, subject_id, created_at, read_at FROM notifications.notifications
+                SELECT id, kind, actor_id, subject_id, created_at, read_at, count, actors FROM notifications.notifications
                 WHERE recipient_id = @me {(before is null ? "" : "AND id < @before")}
                 ORDER BY id DESC LIMIT @take
                 """,
                 r => new NotificationReply(r.GetGuid(0), r.GetString(1), r.GetGuid(2), r.IsDBNull(3) ? null : r.GetGuid(3),
-                    r.GetFieldValue<DateTimeOffset>(4), r.IsDBNull(5) ? null : r.GetFieldValue<DateTimeOffset>(5)),
+                    r.GetFieldValue<DateTimeOffset>(4), r.IsDBNull(5) ? null : r.GetFieldValue<DateTimeOffset>(5), r.GetInt32(6), r.GetFieldValue<Guid[]>(7)),
                 ct, [("me", user.UserId()), ("take", take + 1), .. before is { } b ? new[] { ("before", (object)b) } : []]);
             var items = page.Take(take).ToList();
             return Results.Ok(new NotificationsPage(items, page.Count > take ? items[^1].NotificationId : null));
@@ -78,7 +81,9 @@ public static class NotificationsModule
     }
 }
 
-internal sealed record NotificationReply(Guid NotificationId, string Kind, Guid ActorId, Guid? SubjectId, DateTimeOffset CreatedAt, DateTimeOffset? ReadAt);
+/// <summary>One hour's new followers (s3-l13): how many, and the first three.</summary>
+internal sealed record NotificationReply(Guid NotificationId, string Kind, Guid ActorId, Guid? SubjectId, DateTimeOffset CreatedAt, DateTimeOffset? ReadAt,
+    int Count, IReadOnlyList<Guid> Actors);
 
 internal sealed record NotificationsPage(IReadOnlyList<NotificationReply> Items, Guid? NextBefore);
 

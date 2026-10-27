@@ -2,8 +2,11 @@ using System.Collections.Concurrent;
 
 namespace Notifications;
 
-/// <summary>What a person would be told on their phone or by email.</summary>
-public sealed record OutgoingNotification(Guid RecipientId, string Kind, Guid ActorId, Guid NotificationId);
+/// <summary>
+/// What a person would be told on their phone or by email. Count is how many new followers the hour's
+/// row holds so far; a celebrity's hourly summary carries the hour's total (s3-l13).
+/// </summary>
+public sealed record OutgoingNotification(Guid RecipientId, string Kind, Guid ActorId, Guid NotificationId, int Count = 1);
 
 /// <summary>
 /// The port to push and email providers. No real provider is wired: the fake below is what runs locally
