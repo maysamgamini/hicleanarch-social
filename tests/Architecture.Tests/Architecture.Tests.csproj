@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Host\Social.Host.csproj" />
+  </ItemGroup>
+
+</Project>

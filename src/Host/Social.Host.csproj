@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <RootNamespace>Social.Host</RootNamespace>
+    <AssemblyName>Social.Host</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\BuildingBlocks\Social.BuildingBlocks.Infrastructure\Social.BuildingBlocks.Infrastructure.csproj" />
+    <ProjectReference Include="..\Modules\Accounts\Accounts.Infrastructure\Accounts.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

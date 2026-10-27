@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Modules\Accounts\Accounts.Infrastructure\Accounts.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

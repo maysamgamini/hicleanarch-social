@@ -5,4 +5,19 @@
     <Project Path="src/BuildingBlocks/Social.BuildingBlocks.Domain/Social.BuildingBlocks.Domain.csproj" />
     <Project Path="src/BuildingBlocks/Social.BuildingBlocks.Infrastructure/Social.BuildingBlocks.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/src/Host/">
+    <Project Path="src/Host/Social.Host.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/" />
+  <Folder Name="/src/Modules/Accounts/">
+    <Project Path="src/Modules/Accounts/Accounts.Application/Accounts.Application.csproj" />
+    <Project Path="src/Modules/Accounts/Accounts.Contracts/Accounts.Contracts.csproj" />
+    <Project Path="src/Modules/Accounts/Accounts.Domain/Accounts.Domain.csproj" />
+    <Project Path="src/Modules/Accounts/Accounts.Infrastructure/Accounts.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Accounts.UnitTests/Accounts.UnitTests.csproj" />
+    <Project Path="tests/Architecture.Tests/Architecture.Tests.csproj" />
+    <Project Path="tests/Integration.Tests/Integration.Tests.csproj" />
+  </Folder>
 </Solution>
