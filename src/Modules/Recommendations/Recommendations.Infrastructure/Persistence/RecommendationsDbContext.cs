@@ -106,7 +106,11 @@ internal sealed class DesignTimeFactory : IDesignTimeDbContextFactory<Recommenda
         new(RecommendationsDbOptions.Configure(new DbContextOptionsBuilder<RecommendationsDbContext>(), "Host=localhost").Options);
 }
 
-internal sealed class RecommendationsMigrator : IModuleMigrator
+/// <summary>
+/// Brings Recommendations' stores up to date in the deploy's migration step: its PostgreSQL schema,
+/// and, when a graph database is configured, the graph's setup step (Neo4j's uniqueness constraint).
+/// </summary>
+internal sealed class RecommendationsMigrator(Neo4j.Driver.IDriver? graph = null) : IModuleMigrator
 {
     public string Module => "Recommendations";
 
@@ -116,5 +120,9 @@ internal sealed class RecommendationsMigrator : IModuleMigrator
     {
         await using var db = new RecommendationsDbContext(RecommendationsDbOptions.Configure(new DbContextOptionsBuilder<RecommendationsDbContext>(), ownerConnectionString).Options);
         await db.Database.MigrateAsync(cancellationToken);
+        if (graph is not null)
+        {
+            await Graph.Neo4jSetup.Run(graph, cancellationToken);
+        }
     }
 }

@@ -4,6 +4,7 @@
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <PackageReference Include="StackExchange.Redis" />
     <PackageReference Include="Testcontainers" />
+    <PackageReference Include="Testcontainers.Neo4j" />
     <PackageReference Include="Testcontainers.PostgreSql" />
   </ItemGroup>
 

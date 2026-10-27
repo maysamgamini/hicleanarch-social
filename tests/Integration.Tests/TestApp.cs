@@ -28,6 +28,8 @@ public static class TestApp
                 // UseSetting, not ConfigureAppConfiguration: the host reads connection strings while it is built.
                 .UseSetting("ConnectionStrings:Owner", database.Owner)
                 .UseSetting("ConnectionStrings:Valkey", database.Valkey)
+                .UseSetting("Graph:Uri", database.Graph)
+                .UseSetting("Graph:Auth", "none")
                 .UseSetting("Auth:ClientId", ClientId)
                 .UseSetting("Auth:LocalSigningKey", SigningKey)
                 .UseSetting("Timeline:Cursor:Keys:Current", CursorKey)

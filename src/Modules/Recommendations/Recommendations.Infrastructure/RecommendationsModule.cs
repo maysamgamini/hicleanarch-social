@@ -11,6 +11,9 @@ using Microsoft.Extensions.DependencyInjection;
 
 using Recommendations.Application;
 using Recommendations.Domain;
+using Neo4j.Driver;
+
+using Recommendations.Infrastructure.Graph;
 using Recommendations.Infrastructure.Persistence;
 
 using Relationships.Contracts;
@@ -31,7 +34,19 @@ public static class RecommendationsModule
         var connectionString = configuration.GetConnectionString("Recommendations")
             ?? throw new InvalidOperationException("ConnectionStrings:Recommendations is not set.");
         services.AddDbContext<RecommendationsDbContext>(db => RecommendationsDbOptions.Configure((DbContextOptionsBuilder<RecommendationsDbContext>)db, connectionString));
-        services.AddSingleton<IModuleMigrator, RecommendationsMigrator>();
+        var graphUri = configuration["Graph:Uri"];
+        if (!string.IsNullOrEmpty(graphUri))
+        {
+            // Bolt to Neo4j locally (bolt://), to Neptune over TLS on AWS (bolt+s://…:8182). The sandbox
+            // uses no IAM database authentication: Graph:Auth is "none".
+            services.AddSingleton(_ => GraphDatabase.Driver(graphUri, GraphAuth(configuration)));
+            services.AddSingleton<IModuleMigrator>(sp => new RecommendationsMigrator(sp.GetRequiredService<IDriver>()));
+        }
+        else
+        {
+            services.AddSingleton<IModuleMigrator>(new RecommendationsMigrator());
+        }
+
         services.AddSingleton(new ModuleDatabase("Recommendations", RecommendationsDbContext.Schema, connectionString));
 
         // Versioned edges make every handler safe to repeat: no inbox.
@@ -46,12 +61,29 @@ public static class RecommendationsModule
         services.AddEventHandler<AccountMuted, GraphProjectionHandlers>(ModuleName.Value);
         services.AddEventHandler<AccountUnmuted, GraphProjectionHandlers>(ModuleName.Value);
 
+        services.AddRecommendationsApplication();
+        // Two adapters of the same ports: the graph database when one is configured, PostgreSQL otherwise.
+        if (!string.IsNullOrEmpty(graphUri) && configuration["Recommendations:Graph"] != "PostgreSQL")
+        {
+            return services
+                .AddSingleton<Neo4jGraph>()
+                .AddSingleton<IGraphProjection>(sp => sp.GetRequiredService<Neo4jGraph>())
+                .AddSingleton<IGraphReads>(sp => sp.GetRequiredService<Neo4jGraph>());
+        }
+
         return services
-            .AddRecommendationsApplication()
             .AddScoped<SqlGraph>()
             .AddScoped<IGraphProjection>(sp => sp.GetRequiredService<SqlGraph>())
             .AddScoped<IGraphReads>(sp => sp.GetRequiredService<SqlGraph>());
     }
+
+    private static IAuthToken GraphAuth(IConfiguration configuration) =>
+        configuration["Graph:Auth"] switch
+        {
+            null or "" or "none" => AuthTokens.None,
+            "basic" => AuthTokens.Basic(configuration["Graph:User"], configuration["Graph:Password"]),
+            var other => throw new InvalidOperationException($"Graph:Auth {other} is not supported: none or basic."),
+        };
 
     public static IEndpointRouteBuilder MapRecommendationsEndpoints(this IEndpointRouteBuilder app)
     {

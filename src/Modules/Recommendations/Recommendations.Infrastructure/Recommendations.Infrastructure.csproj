@@ -7,6 +7,7 @@
   <ItemGroup>
     <PackageReference Include="EFCore.NamingConventions" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
+    <PackageReference Include="Neo4j.Driver" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
   </ItemGroup>
 
@@ -15,6 +16,12 @@
     <ProjectReference Include="..\..\Accounts\Accounts.Contracts\Accounts.Contracts.csproj" />
     <ProjectReference Include="..\..\Relationships\Relationships.Contracts\Relationships.Contracts.csproj" />
     <ProjectReference Include="..\..\..\BuildingBlocks\Social.BuildingBlocks.Infrastructure\Social.BuildingBlocks.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Read at start-up: the lint test reads exactly what runs. -->
+    <EmbeddedResource Include="Graph\Queries.cypher" LogicalName="Recommendations.Graph.Queries.cypher" />
+    <EmbeddedResource Include="Graph\Setup.cypher" LogicalName="Recommendations.Graph.Setup.cypher" />
   </ItemGroup>
 
 </Project>

@@ -22,3 +22,10 @@ services:
       test: ["CMD", "valkey-cli", "ping"]
       interval: 2s
       retries: 30
+
+  # Neo4j 5.26 Community (GPLv3), run as a server only: the code links only the Apache 2.0 driver.
+  neo4j:
+    image: neo4j:5.26-community
+    environment:
+      NEO4J_AUTH: none
+    ports: ["7687:7687", "7474:7474"]

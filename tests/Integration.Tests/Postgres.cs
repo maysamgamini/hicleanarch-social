@@ -7,6 +7,7 @@ using Npgsql;
 
 using Social.BuildingBlocks.Infrastructure.Persistence;
 
+using Testcontainers.Neo4j;
 using Testcontainers.PostgreSql;
 
 [assembly: AssemblyFixture(typeof(Integration.Tests.Postgres))]
@@ -36,14 +37,22 @@ public sealed class Postgres : IAsyncLifetime
 
     public string Valkey => $"{_valkey.Hostname}:{_valkey.GetMappedPublicPort(6379)},abortConnect=false";
 
+    // The graph database Recommendations projects into, authentication off. Tests share it: every
+    // account has a fresh id, so no two tests meet.
+    private readonly Neo4jContainer _neo4j = new Neo4jBuilder("neo4j:5.26-community")
+        .WithEnvironment("NEO4J_AUTH", "none")
+        .Build();
+
+    public string Graph => _neo4j.GetConnectionString();
+
     // CREATE DATABASE ... TEMPLATE needs the template to have no other session; one copy at a time.
     private readonly SemaphoreSlim _copying = new(1, 1);
 
     public async ValueTask InitializeAsync()
     {
-        await Task.WhenAll(_container.StartAsync(), _valkey.StartAsync());
+        await Task.WhenAll(_container.StartAsync(), _valkey.StartAsync(), _neo4j.StartAsync());
         await Execute(_container.GetConnectionString(), $"CREATE DATABASE {Template}");
-        var template = new TestDatabase(At(Template), Valkey);
+        var template = new TestDatabase(At(Template), Valkey, Graph);
         await using (var host = TestApp.Start(template))
         {
             await host.Services.GetRequiredService<DatabaseMigrator>().Run(template.Owner, CancellationToken.None);
@@ -56,6 +65,7 @@ public sealed class Postgres : IAsyncLifetime
     {
         await _container.DisposeAsync();
         await _valkey.DisposeAsync();
+        await _neo4j.DisposeAsync();
     }
 
     /// <summary>A fresh, migrated database: the module roles, schemas and grants of a deploy, and no rows.</summary>
@@ -74,7 +84,7 @@ public sealed class Postgres : IAsyncLifetime
 
         // TEMPORARY is a right on the database itself, which a copy does not inherit from its template.
         await Execute(_container.GetConnectionString(), $"REVOKE TEMPORARY ON DATABASE {name} FROM PUBLIC");
-        return new TestDatabase(At(name), Valkey);
+        return new TestDatabase(At(name), Valkey, Graph);
     }
 
     private string At(string database) => new NpgsqlConnectionStringBuilder(_container.GetConnectionString())
@@ -95,9 +105,11 @@ public sealed class Postgres : IAsyncLifetime
 }
 
 /// <summary>One test's database: the owner's connection, each module role's, and the shared Valkey.</summary>
-public sealed class TestDatabase(string owner, string valkey)
+public sealed class TestDatabase(string owner, string valkey, string graph)
 {
     public string Valkey { get; } = valkey;
+
+    public string Graph { get; } = graph;
 
     /// <summary>Every module with a schema, as its connection string name and its role's name prefix.</summary>
     public static readonly string[] Modules = ["Accounts", "Relationships", "Posts", "Timeline", "Recommendations"];
