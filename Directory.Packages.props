@@ -33,6 +33,20 @@
     <!-- MIT; the client speaks to Valkey (BSD-3) -->
     <PackageVersion Include="StackExchange.Redis" Version="3.4.5" />
   </ItemGroup>
+  <!-- The BuildingBlocks, as packages from the local feed (s3-l15). On a developer's machine
+       scripts/pack-buildingblocks.sh packs a fresh prerelease (<version>-local.<time>) and records it
+       in artifacts/packages/local-version.props, so a stale copy is never restored from the package
+       cache. CI and the Docker images pack the release version into a clean feed. -->
+  <Import Project="$(MSBuildThisFileDirectory)artifacts/packages/local-version.props"
+          Condition="Exists('$(MSBuildThisFileDirectory)artifacts/packages/local-version.props')" />
+  <PropertyGroup>
+    <BuildingBlocksVersion Condition="'$(BuildingBlocksVersion)' == ''">1.0.0</BuildingBlocksVersion>
+  </PropertyGroup>
+  <ItemGroup Label="BuildingBlocks">
+    <PackageVersion Include="Social.BuildingBlocks.Application" Version="$(BuildingBlocksVersion)" />
+    <PackageVersion Include="Social.BuildingBlocks.Domain" Version="$(BuildingBlocksVersion)" />
+    <PackageVersion Include="Social.BuildingBlocks.Infrastructure" Version="$(BuildingBlocksVersion)" />
+  </ItemGroup>
   <ItemGroup Label="Tests">
     <!-- MIT -->
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.13" />

@@ -2,8 +2,10 @@
 # runs as the one-off migration task.
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
-COPY global.json Directory.Build.props Directory.Packages.props .editorconfig NuGet.config ./
+COPY global.json Directory.Build.props Directory.Packages.props .editorconfig NuGet.config BuildingBlocks.slnx ./
 COPY src/ src/
+# The modules use the BuildingBlocks as packages (s3-l15): pack the release version into the local feed first.
+RUN dotnet pack BuildingBlocks.slnx -c Release -o artifacts/packages
 RUN dotnet publish src/Host/Social.Host.csproj -c Release -o /app
 # The CA bundle the database's certificates chain to: the connection strings ask Npgsql to check the
 # server against it (SSL Mode=VerifyFull).

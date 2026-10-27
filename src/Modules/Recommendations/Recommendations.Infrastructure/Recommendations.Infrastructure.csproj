@@ -16,7 +16,7 @@
     <ProjectReference Include="..\Recommendations.Application\Recommendations.Application.csproj" />
     <ProjectReference Include="..\..\Accounts\Accounts.Contracts\Accounts.Contracts.csproj" />
     <ProjectReference Include="..\..\Relationships\Relationships.Contracts\Relationships.Contracts.csproj" />
-    <ProjectReference Include="..\..\..\BuildingBlocks\Social.BuildingBlocks.Infrastructure\Social.BuildingBlocks.Infrastructure.csproj" />
+    <PackageReference Include="Social.BuildingBlocks.Infrastructure" />
   </ItemGroup>
 
   <ItemGroup>

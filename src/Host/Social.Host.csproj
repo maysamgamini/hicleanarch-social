@@ -15,7 +15,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\BuildingBlocks\Social.BuildingBlocks.Infrastructure\Social.BuildingBlocks.Infrastructure.csproj" />
+    <PackageReference Include="Social.BuildingBlocks.Infrastructure" />
     <ProjectReference Include="..\Modules\Accounts\Accounts.Infrastructure\Accounts.Infrastructure.csproj" />
     <ProjectReference Include="..\Modules\Relationships\Relationships.Infrastructure\Relationships.Infrastructure.csproj" />
     <ProjectReference Include="..\Modules\Posts\Posts.Infrastructure\Posts.Infrastructure.csproj" />

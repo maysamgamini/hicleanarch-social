@@ -18,6 +18,8 @@ pg=$(port "$name-pg" 5432); bolt=$(port "$name-neo4j" 7687)
 for _ in $(seq 1 60); do docker exec "$name-pg" pg_isready -U postgres >/dev/null 2>&1 && break; sleep 1; done
 for _ in $(seq 1 90); do docker logs "$name-neo4j" 2>&1 | grep -q "Started." && break; sleep 1; done
 
+# The modules restore the BuildingBlocks from the local feed (s3-l15): pack them if this clone has none.
+ls "$here"/artifacts/packages/Social.BuildingBlocks.*.nupkg >/dev/null 2>&1 || "$here/scripts/pack-buildingblocks.sh"
 args=("$@")
 [[ ${#args[@]} -gt 0 ]] || args=(--accounts 100000 --readers 100)
 dotnet run --project "$here/tools/graphgen" -c Release -- \

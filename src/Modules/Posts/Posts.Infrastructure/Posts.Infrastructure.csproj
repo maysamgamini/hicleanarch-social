@@ -13,7 +13,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Posts.Application\Posts.Application.csproj" />
-    <ProjectReference Include="..\..\..\BuildingBlocks\Social.BuildingBlocks.Infrastructure\Social.BuildingBlocks.Infrastructure.csproj" />
+    <PackageReference Include="Social.BuildingBlocks.Infrastructure" />
   </ItemGroup>
 
 </Project>

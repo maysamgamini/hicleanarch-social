@@ -51,6 +51,8 @@ export ConnectionStrings__Valkey="127.0.0.1:$valkey,abortConnect=false"
 export Graph__Uri="bolt://127.0.0.1:$bolt"
 export Logging__LogLevel__Default=Warning
 
+# The modules restore the BuildingBlocks from the local feed (s3-l15): pack them if this clone has none.
+ls "$here"/artifacts/packages/Social.BuildingBlocks.*.nupkg >/dev/null 2>&1 || "$here/scripts/pack-buildingblocks.sh"
 dotnet publish "$here/src/Host/Social.Host.csproj" -c Release -o "$run/app" -v:q >/dev/null
 cd "$run/app" # the content root: the published appsettings.json files are read from here
 host() { dotnet "$run/app/Social.Host.dll" "$@"; }

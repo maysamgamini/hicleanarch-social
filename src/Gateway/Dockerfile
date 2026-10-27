@@ -2,9 +2,10 @@
 #   docker build -f src/Gateway/Dockerfile .
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
-COPY global.json Directory.Build.props Directory.Packages.props .editorconfig NuGet.config ./
+COPY global.json Directory.Build.props Directory.Packages.props .editorconfig NuGet.config BuildingBlocks.slnx ./
 COPY src/BuildingBlocks/ src/BuildingBlocks/
 COPY src/Gateway/ src/Gateway/
+RUN dotnet pack BuildingBlocks.slnx -c Release -o artifacts/packages
 RUN dotnet publish src/Gateway/Social.Gateway.csproj -c Release -o /app
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0

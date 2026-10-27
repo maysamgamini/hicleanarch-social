@@ -3,7 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Recommendations.Contracts\Recommendations.Contracts.csproj" />
     <ProjectReference Include="..\Recommendations.Domain\Recommendations.Domain.csproj" />
-    <ProjectReference Include="..\..\..\BuildingBlocks\Social.BuildingBlocks.Application\Social.BuildingBlocks.Application.csproj" />
+    <PackageReference Include="Social.BuildingBlocks.Application" />
   </ItemGroup>
 
 </Project>

@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\BuildingBlocks\Social.BuildingBlocks.Application\Social.BuildingBlocks.Application.csproj" />
+    <PackageReference Include="Social.BuildingBlocks.Application" />
   </ItemGroup>
 
 </Project>
