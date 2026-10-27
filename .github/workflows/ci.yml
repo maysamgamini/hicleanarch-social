@@ -18,14 +18,29 @@ jobs:
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           global-json-file: global.json
-      - run: dotnet build Social.slnx
-      - run: dotnet test Social.slnx --no-build
+      - name: Build, warnings as errors
+        run: dotnet build Social.slnx
+      - name: Unit tests
+        run: |
+          for project in tests/*.UnitTests; do
+            dotnet test "$project" --no-build
+          done
+      - name: Architecture tests
+        run: dotnet test tests/Architecture.Tests --no-build
+      - name: The openCypher lint
+        run: dotnet test tests/Graph.Tests --no-build --filter "FullyQualifiedName~CypherLintTests"
+      - name: Graph tests (Neo4j 5.26 in Testcontainers; the Neptune run is skipped without NEPTUNE_ENDPOINT)
+        run: dotnet test tests/Graph.Tests --no-build
+      - name: Integration and rule tests (PostgreSQL 17, Valkey 8, Neo4j 5.26 in Testcontainers)
+        run: dotnet test tests/Integration.Tests --no-build
       - name: Every model change has its migration
         run: |
           dotnet tool restore
           for project in $(grep -rl --include='*.csproj' EntityFrameworkCore.Design src/Modules); do
             dotnet ef migrations has-pending-model-changes --project "$project" --no-build
           done
+      - name: The image builds
+        run: docker build -q -t social-api:ci .
 
   infra:
     runs-on: ubuntu-latest
