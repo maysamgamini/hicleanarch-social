@@ -22,6 +22,15 @@ internal sealed class SqlRelationshipReads(RelationshipsDbContext db) : IRelatio
         return rows.Count == 0 ? (0, 0) : rows[0];
     }
 
+    public async Task<IReadOnlyList<Guid>> HiddenFrom(Guid viewer, CancellationToken cancellationToken) =>
+        await db.Read("""
+            SELECT blocked_id FROM relationships.blocks WHERE blocker_id = @viewer
+            UNION
+            SELECT blocker_id FROM relationships.blocks WHERE blocked_id = @viewer
+            UNION
+            SELECT muted_id FROM relationships.mutes WHERE muter_id = @viewer
+            """, r => r.GetGuid(0), cancellationToken, ("viewer", viewer));
+
     private async Task<RelationshipPage> Page(string listed, string owner, Guid account, Guid? after, int limit, CancellationToken cancellationToken)
     {
         // One more row than asked for says whether another page exists.

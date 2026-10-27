@@ -46,6 +46,15 @@ public static class RelationshipsModule
         account.MapDelete("/follow", (Guid id, ClaimsPrincipal user, IDispatcher dispatcher, CancellationToken ct) =>
             Reply(dispatcher.Send<Unfollow, FollowState>(new Unfollow(user.UserId(), id), ct)));
 
+        account.MapPut("/block", (Guid id, ClaimsPrincipal user, IDispatcher dispatcher, CancellationToken ct) =>
+            Reply(dispatcher.Send<Block, BlockState>(new Block(user.UserId(), id), ct)));
+        account.MapDelete("/block", (Guid id, ClaimsPrincipal user, IDispatcher dispatcher, CancellationToken ct) =>
+            Reply(dispatcher.Send<Unblock, BlockState>(new Unblock(user.UserId(), id), ct)));
+        account.MapPut("/mute", (Guid id, ClaimsPrincipal user, IDispatcher dispatcher, CancellationToken ct) =>
+            Reply(dispatcher.Send<Mute, MuteState>(new Mute(user.UserId(), id), ct)));
+        account.MapDelete("/mute", (Guid id, ClaimsPrincipal user, IDispatcher dispatcher, CancellationToken ct) =>
+            Reply(dispatcher.Send<Unmute, MuteState>(new Unmute(user.UserId(), id), ct)));
+
         account.MapGet("/followers", async (Guid id, Guid? after, int? limit, IDispatcher dispatcher, CancellationToken ct) =>
             PageReply.From(await dispatcher.Query<ListFollowers, RelationshipPage>(new ListFollowers(id, after, PageSize.Clamp(limit)), ct)));
         account.MapGet("/following", async (Guid id, Guid? after, int? limit, IDispatcher dispatcher, CancellationToken ct) =>

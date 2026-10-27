@@ -23,6 +23,22 @@ internal sealed class RelationshipsDbContext(DbContextOptions<RelationshipsDbCon
             follow.HasIndex(f => new { f.FolloweeId, f.FollowerId }).HasDatabaseName("follows_by_followee");
         });
 
+        modelBuilder.Entity<BlockRow>(block =>
+        {
+            block.ToTable("blocks", t => t.HasCheckConstraint("blocks_not_self", "blocker_id <> blocked_id"));
+            block.HasKey(b => new { b.BlockerId, b.BlockedId });
+            block.Property(b => b.CreatedAt).HasDefaultValueSql("now()");
+            // "Who blocked the viewer", for the read filter.
+            block.HasIndex(b => b.BlockedId).HasDatabaseName("blocks_by_blocked");
+        });
+
+        modelBuilder.Entity<MuteRow>(mute =>
+        {
+            mute.ToTable("mutes", t => t.HasCheckConstraint("mutes_not_self", "muter_id <> muted_id"));
+            mute.HasKey(m => new { m.MuterId, m.MutedId });
+            mute.Property(m => m.CreatedAt).HasDefaultValueSql("now()");
+        });
+
         modelBuilder.Entity<PairVersionRow>(pair =>
         {
             pair.ToTable("pair_versions", t => t.HasCheckConstraint("pair_versions_ordered", "low_id < high_id"));
@@ -42,6 +58,24 @@ internal sealed class FollowRow
     public Guid FollowerId { get; set; }
 
     public Guid FolloweeId { get; set; }
+
+    public DateTimeOffset CreatedAt { get; set; }
+}
+
+internal sealed class BlockRow
+{
+    public Guid BlockerId { get; set; }
+
+    public Guid BlockedId { get; set; }
+
+    public DateTimeOffset CreatedAt { get; set; }
+}
+
+internal sealed class MuteRow
+{
+    public Guid MuterId { get; set; }
+
+    public Guid MutedId { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
 }

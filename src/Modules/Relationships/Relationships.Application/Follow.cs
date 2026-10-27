@@ -36,8 +36,13 @@ public sealed class FollowHandler(
         return await transaction.Run(async ct =>
         {
             var pair = await store.LockPair(command.FollowerId, command.FolloweeId, ct);
-            if (pair.Follow(command.FollowerId, command.FolloweeId) == Change.Added
-                && !await store.AddFollow(command.FollowerId, command.FolloweeId, ct))
+            var follow = pair.Follow(command.FollowerId, command.FolloweeId);
+            if (!follow.IsSuccess)
+            {
+                return Result.Failure<FollowState>(follow.Errors);
+            }
+
+            if (follow.Value == Change.Added && !await store.AddFollow(command.FollowerId, command.FolloweeId, ct))
             {
                 return Result.Failure<FollowState>(RelationshipErrors.FollowLimit);
             }

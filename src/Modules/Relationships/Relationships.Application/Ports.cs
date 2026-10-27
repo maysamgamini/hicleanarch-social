@@ -26,6 +26,10 @@ public interface IRelationshipStore
 
     /// <summary>Removes the follow and takes it off both counts.</summary>
     Task RemoveFollow(Guid follower, Guid followee, CancellationToken cancellationToken);
+
+    Task Add(EdgeKind kind, Guid from, Guid to, CancellationToken cancellationToken);
+
+    Task Remove(EdgeKind kind, Guid from, Guid to, CancellationToken cancellationToken);
 }
 
 /// <summary>An account listed in a relationship page, and since when.</summary>
@@ -44,6 +48,9 @@ public interface IRelationshipReads
     Task<IReadOnlyList<Guid>> AllFollowing(Guid account, CancellationToken cancellationToken);
 
     Task<(long Followers, long Following)> Counts(Guid account, CancellationToken cancellationToken);
+
+    /// <summary>Blocked by the viewer, blocking the viewer, or muted by the viewer.</summary>
+    Task<IReadOnlyList<Guid>> HiddenFrom(Guid viewer, CancellationToken cancellationToken);
 }
 
 /// <summary>Whether an account exists and is active. Accounts answers it; this module never reads its tables.</summary>

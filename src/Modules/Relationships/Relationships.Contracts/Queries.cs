@@ -17,3 +17,11 @@ public sealed record GetFollowing(Guid AccountId) : IQuery<IReadOnlyList<Guid>>;
 public sealed record GetCounts(Guid AccountId) : IQuery<RelationshipCounts>;
 
 public sealed record RelationshipCounts(long Followers, long Following);
+
+/// <summary>
+/// The authors a viewer must not see: the accounts the viewer blocked, the accounts that blocked the
+/// viewer, and the accounts the viewer muted. The feed's read filter asks it for every page.
+/// </summary>
+public sealed record GetHiddenAuthors(Guid ViewerId) : IQuery<HiddenAuthors>;
+
+public sealed record HiddenAuthors(IReadOnlyList<Guid> AccountIds);

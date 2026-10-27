@@ -23,6 +23,34 @@ namespace Relationships.Infrastructure.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Relationships.Infrastructure.Persistence.BlockRow", b =>
+                {
+                    b.Property<Guid>("BlockerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("blocker_id");
+
+                    b.Property<Guid>("BlockedId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("blocked_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("BlockerId", "BlockedId")
+                        .HasName("pk_blocks");
+
+                    b.HasIndex("BlockedId")
+                        .HasDatabaseName("blocks_by_blocked");
+
+                    b.ToTable("blocks", "relationships", t =>
+                        {
+                            t.HasCheckConstraint("blocks_not_self", "blocker_id <> blocked_id");
+                        });
+                });
+
             modelBuilder.Entity("Relationships.Infrastructure.Persistence.CountsRow", b =>
                 {
                     b.Property<Guid>("AccountId")
@@ -69,6 +97,31 @@ namespace Relationships.Infrastructure.Persistence.Migrations
                     b.ToTable("follows", "relationships", t =>
                         {
                             t.HasCheckConstraint("follows_not_self", "follower_id <> followee_id");
+                        });
+                });
+
+            modelBuilder.Entity("Relationships.Infrastructure.Persistence.MuteRow", b =>
+                {
+                    b.Property<Guid>("MuterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("muter_id");
+
+                    b.Property<Guid>("MutedId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("muted_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("MuterId", "MutedId")
+                        .HasName("pk_mutes");
+
+                    b.ToTable("mutes", "relationships", t =>
+                        {
+                            t.HasCheckConstraint("mutes_not_self", "muter_id <> muted_id");
                         });
                 });
 

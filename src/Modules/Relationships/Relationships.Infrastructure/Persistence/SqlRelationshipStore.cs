@@ -21,6 +21,12 @@ internal sealed class SqlRelationshipStore(RelationshipsDbContext db) : IRelatio
     private const string EdgesOfPair = """
         SELECT 'Follow', follower_id, followee_id FROM relationships.follows
         WHERE (follower_id = @a AND followee_id = @b) OR (follower_id = @b AND followee_id = @a)
+        UNION ALL
+        SELECT 'Block', blocker_id, blocked_id FROM relationships.blocks
+        WHERE (blocker_id = @a AND blocked_id = @b) OR (blocker_id = @b AND blocked_id = @a)
+        UNION ALL
+        SELECT 'Mute', muter_id, muted_id FROM relationships.mutes
+        WHERE (muter_id = @a AND muted_id = @b) OR (muter_id = @b AND muted_id = @a)
         """;
 
     // Both accounts' counts rows exist, then are locked in account-id order: any two transactions
@@ -60,6 +66,20 @@ internal sealed class SqlRelationshipStore(RelationshipsDbContext db) : IRelatio
             cancellationToken, ("follower", follower), ("followee", followee));
         return true;
     }
+
+    public Task Add(EdgeKind kind, Guid from, Guid to, CancellationToken cancellationToken) => kind switch
+    {
+        EdgeKind.Block => db.Execute("INSERT INTO relationships.blocks (blocker_id, blocked_id) VALUES (@from, @to)", cancellationToken, ("from", from), ("to", to)),
+        EdgeKind.Mute => db.Execute("INSERT INTO relationships.mutes (muter_id, muted_id) VALUES (@from, @to)", cancellationToken, ("from", from), ("to", to)),
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), "A follow is added with its counts: AddFollow."),
+    };
+
+    public Task Remove(EdgeKind kind, Guid from, Guid to, CancellationToken cancellationToken) => kind switch
+    {
+        EdgeKind.Block => db.Execute("DELETE FROM relationships.blocks WHERE blocker_id = @from AND blocked_id = @to", cancellationToken, ("from", from), ("to", to)),
+        EdgeKind.Mute => db.Execute("DELETE FROM relationships.mutes WHERE muter_id = @from AND muted_id = @to", cancellationToken, ("from", from), ("to", to)),
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), "A follow is removed with its counts: RemoveFollow."),
+    };
 
     public async Task RemoveFollow(Guid follower, Guid followee, CancellationToken cancellationToken)
     {
