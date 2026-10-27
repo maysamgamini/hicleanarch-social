@@ -54,6 +54,7 @@ public sealed class BlockAndMuteTests(Postgres postgres) : IntegrationTest(postg
 
         Assert.Equal(HttpStatusCode.OK, reply.StatusCode);
         Assert.Equal(0L, await Follows(ada, bob));
+        await LedgerFolded();
         Assert.Equal(0L, await Db.Scalar<long>("SELECT followers + following FROM relationships.relationship_counts WHERE account_id = @a", ("a", ada)));
         Assert.Equal(0L, await Db.Scalar<long>("SELECT followers + following FROM relationships.relationship_counts WHERE account_id = @a", ("a", bob)));
     }

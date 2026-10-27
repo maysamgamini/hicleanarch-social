@@ -48,6 +48,14 @@ internal sealed class RelationshipsDbContext(DbContextOptions<RelationshipsDbCon
             pair.HasKey(p => new { p.LowId, p.HighId });
         });
 
+        modelBuilder.Entity<FollowChangeRow>(change =>
+        {
+            change.ToTable("follow_changes");
+            change.HasKey(c => c.Id);
+            change.Property(c => c.Id).UseIdentityAlwaysColumn();
+            change.Property(c => c.CreatedAt).HasDefaultValueSql("now()");
+        });
+
         modelBuilder.Entity<CountsRow>(counts =>
         {
             counts.ToTable("relationship_counts");
@@ -91,6 +99,18 @@ internal sealed class PairVersionRow
     public Guid HighId { get; set; }
 
     public long Version { get; set; }
+}
+
+/// <summary>An append-only counter ledger: +1 or -1 to an account's followers, folded every second.</summary>
+internal sealed class FollowChangeRow
+{
+    public long Id { get; set; }
+
+    public Guid AccountId { get; set; }
+
+    public int Delta { get; set; }
+
+    public DateTimeOffset CreatedAt { get; set; }
 }
 
 internal sealed class CountsRow

@@ -24,3 +24,10 @@ public sealed record AccountMuted(Guid EventId, DateTimeOffset OccurredAt, Guid 
 
 public sealed record AccountUnmuted(Guid EventId, DateTimeOffset OccurredAt, Guid MuterId, Guid MutedId, long PairVersion)
     : IntegrationEvent(EventId, OccurredAt);
+
+/// <summary>
+/// An account's follower count changed: at most one a second per account, from the counts aggregator.
+/// It carries the new count, so a consumer keeps the latest it has seen.
+/// </summary>
+public sealed record FollowerCountChanged(Guid EventId, DateTimeOffset OccurredAt, Guid AccountId, long Followers)
+    : IntegrationEvent(EventId, OccurredAt);

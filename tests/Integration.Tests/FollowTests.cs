@@ -19,6 +19,8 @@ public sealed class FollowTests(Postgres postgres) : IntegrationTest(postgres)
 
     private async Task<(long Followers, long Following)> Counts(Guid account)
     {
+        // Followers are folded from the ledger within a second; following is exact at once.
+        await LedgerFolded();
         var followers = await Db.Scalar<long>("SELECT coalesce(max(followers), 0) FROM relationships.relationship_counts WHERE account_id = @a", ("a", account));
         var following = await Db.Scalar<long>("SELECT coalesce(max(following), 0) FROM relationships.relationship_counts WHERE account_id = @a", ("a", account));
         return (followers, following);

@@ -11,7 +11,7 @@ TF=${TF:-terraform}
 here=$(cd "$(dirname "$0")/.." && pwd)
 work=$(mktemp -d)
 name="social-moto-$$"
-cleanup() { docker rm -f "$name" >/dev/null 2>&1 || true; rm -rf "$work"; }
+cleanup() { docker rm -fv "$name" >/dev/null 2>&1 || true; rm -rf "$work"; }
 trap cleanup EXIT
 
 supported=(variables network alb secrets cognito logs iam)

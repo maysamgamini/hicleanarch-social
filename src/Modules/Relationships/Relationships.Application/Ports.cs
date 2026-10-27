@@ -63,3 +63,16 @@ public interface IAccountDirectory
 {
     Task<bool> IsActive(Guid account, CancellationToken cancellationToken);
 }
+
+/// <summary>
+/// The follower-count ledger: follows and unfollows append +1 or -1 for the followee, and a worker
+/// folds them into the counts every second.
+/// </summary>
+public interface IFollowerLedger
+{
+    /// <summary>Folds up to a batch of ledger rows into the counts; the accounts changed, with their new counts.</summary>
+    Task<IReadOnlyList<(Guid Account, long Followers)>> Fold(int batch, CancellationToken cancellationToken);
+
+    /// <summary>Accounts whose counts, with the ledger rows not folded yet, differ from their follows rows.</summary>
+    Task<long> Mismatches(CancellationToken cancellationToken);
+}

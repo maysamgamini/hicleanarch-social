@@ -31,19 +31,22 @@ internal sealed class SqlRelationshipStore(RelationshipsDbContext db) : IRelatio
         WHERE (muter_id = @a AND muted_id = @b) OR (muter_id = @b AND muted_id = @a)
         """;
 
-    // Both accounts' counts rows exist, then are locked in account-id order: any two transactions
-    // that touch the same counts rows take their locks in the same order, so they cannot deadlock.
-    private const string LockCounts = """
-        INSERT INTO relationships.relationship_counts (account_id, followers, following)
-        SELECT id, 0, 0 FROM unnest(ARRAY[@a, @b]::uuid[]) AS id ORDER BY id
-        ON CONFLICT (account_id) DO NOTHING;
-        SELECT account_id FROM relationships.relationship_counts WHERE account_id IN (@a, @b) ORDER BY account_id FOR UPDATE;
+    // Only the follower's own counts row is written in the follow's transaction: one person's row is
+    // never hot. Its following count is a guarded counter: it affects one row, or the follow is refused.
+    private const string EnsureCounts = """
+        INSERT INTO relationships.relationship_counts (account_id, followers, following) VALUES (@follower, 0, 0)
+        ON CONFLICT (account_id) DO NOTHING
         """;
 
-    // The follow limit is a guarded counter: it affects one row, or the follow is refused.
     private const string CountFollowGuarded = """
         UPDATE relationships.relationship_counts SET following = following + 1
         WHERE account_id = @follower AND following < @max
+        """;
+
+    // The followee's follower count is not touched here: the change is appended to the ledger, which a
+    // worker folds into relationship_counts every second. A celebrity's row is never a lock to wait on.
+    private const string AppendFollowerChange = """
+        INSERT INTO relationships.follow_changes (account_id, delta) VALUES (@followee, @delta)
         """;
 
     public async Task<Pair> LockPair(Guid first, Guid second, CancellationToken cancellationToken)
@@ -56,14 +59,13 @@ internal sealed class SqlRelationshipStore(RelationshipsDbContext db) : IRelatio
 
     public async Task<bool> AddFollow(Guid follower, Guid followee, CancellationToken cancellationToken)
     {
-        await db.Execute(LockCounts, cancellationToken, ("a", follower), ("b", followee));
+        await db.Execute(EnsureCounts, cancellationToken, ("follower", follower));
         if (await db.Execute(CountFollowGuarded, cancellationToken, ("follower", follower), ("max", Pair.MaxFollowing)) != 1)
         {
             return false;
         }
 
-        await db.Execute("UPDATE relationships.relationship_counts SET followers = followers + 1 WHERE account_id = @followee",
-            cancellationToken, ("followee", followee));
+        await db.Execute(AppendFollowerChange, cancellationToken, ("followee", followee), ("delta", 1));
         await db.Execute("INSERT INTO relationships.follows (follower_id, followee_id) VALUES (@follower, @followee)",
             cancellationToken, ("follower", follower), ("followee", followee));
         return true;
@@ -85,11 +87,10 @@ internal sealed class SqlRelationshipStore(RelationshipsDbContext db) : IRelatio
 
     public async Task RemoveFollow(Guid follower, Guid followee, CancellationToken cancellationToken)
     {
-        await db.Execute(LockCounts, cancellationToken, ("a", follower), ("b", followee));
         await db.Execute("""
             UPDATE relationships.relationship_counts SET following = following - 1 WHERE account_id = @follower;
-            UPDATE relationships.relationship_counts SET followers = followers - 1 WHERE account_id = @followee;
             DELETE FROM relationships.follows WHERE follower_id = @follower AND followee_id = @followee;
             """, cancellationToken, ("follower", follower), ("followee", followee));
+        await db.Execute(AppendFollowerChange, cancellationToken, ("followee", followee), ("delta", -1));
     }
 }

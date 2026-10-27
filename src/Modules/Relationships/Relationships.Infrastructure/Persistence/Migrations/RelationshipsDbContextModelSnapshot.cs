@@ -72,6 +72,35 @@ namespace Relationships.Infrastructure.Persistence.Migrations
                     b.ToTable("relationship_counts", "relationships");
                 });
 
+            modelBuilder.Entity("Relationships.Infrastructure.Persistence.FollowChangeRow", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("Id"));
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("account_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<int>("Delta")
+                        .HasColumnType("integer")
+                        .HasColumnName("delta");
+
+                    b.HasKey("Id")
+                        .HasName("pk_follow_changes");
+
+                    b.ToTable("follow_changes", "relationships");
+                });
+
             modelBuilder.Entity("Relationships.Infrastructure.Persistence.FollowRow", b =>
                 {
                     b.Property<Guid>("FollowerId")

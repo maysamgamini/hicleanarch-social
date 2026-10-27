@@ -11,6 +11,8 @@ public static class RelationshipsApplication
     public static IServiceCollection AddRelationshipsApplication(this IServiceCollection services) =>
         services
             .AddScoped<ICommandHandler<Follow, FollowState>, FollowHandler>()
+            .AddScoped<ICommandHandler<FoldFollowerCounts, int>, FoldFollowerCountsHandler>()
+            .AddScoped<IQueryHandler<CheckCounts, long>, CheckCountsHandler>()
             .AddScoped<ICommandHandler<Unfollow, FollowState>, UnfollowHandler>()
             .AddScoped<ICommandHandler<Block, BlockState>, BlockHandler>()
             .AddScoped<ICommandHandler<Unblock, BlockState>, UnblockHandler>()

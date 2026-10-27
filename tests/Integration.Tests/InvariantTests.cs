@@ -176,6 +176,8 @@ public sealed class InvariantTests(Postgres postgres) : IntegrationTest(postgres
         // Everyone follows everyone at once; then half the follows end while the other half are sent again.
         await Task.WhenAll(moves.Select(m => people.Follow(m.a, m.b)));
         await Task.WhenAll(moves.Select((m, i) => i % 2 == 0 ? people.Unfollow(m.a, m.b) : people.Follow(m.a, m.b)));
+        // Followers are folded from the ledger every second: the invariant holds once it is folded.
+        await LedgerFolded();
 
         var mismatches = await Db.Scalar<long>("""
             SELECT count(*) FROM relationships.relationship_counts c

@@ -38,14 +38,18 @@ public static class RelationshipsModule
         services.AddPublishedEvent<AccountUnblocked>();
         services.AddPublishedEvent<AccountMuted>();
         services.AddPublishedEvent<AccountUnmuted>();
+        services.AddPublishedEvent<FollowerCountChanged>();
         services.AddKeyedScoped<ITransactionScope>(ModuleName.Value, (sp, _) => new ModuleTransaction<RelationshipsDbContext>(sp.GetRequiredService<RelationshipsDbContext>()));
         services.AddSingleton<IModuleMigrator, RelationshipsMigrator>();
         services.AddHostedService<RelationshipsMonitor>();
+        services.AddHostedService<CountsAggregator>();
+        services.AddHostedService<CountsCheck>();
         services.AddSingleton(new ModuleDatabase("Relationships", RelationshipsDbContext.Schema, connectionString));
         return services
             .AddRelationshipsApplication()
             .AddScoped<IRelationshipStore, SqlRelationshipStore>()
             .AddScoped<IRelationshipReads, SqlRelationshipReads>()
+            .AddScoped<IFollowerLedger, SqlFollowerLedger>()
             .AddScoped<IAccountDirectory, AccountDirectory>();
     }
 

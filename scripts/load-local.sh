@@ -14,7 +14,7 @@ cleanup() {
   # LOAD_LOGS=<folder> keeps the hosts' logs of this run there.
   if [[ -n "${LOAD_LOGS:-}" ]]; then mkdir -p "$LOAD_LOGS"; cp "$run"/*.log "$LOAD_LOGS"/ 2>/dev/null || true; fi
   for pid in ${pids[@]+"${pids[@]}"}; do kill "$pid" 2>/dev/null || true; done
-  docker rm -f "$name-pg" "$name-valkey" "$name-neo4j" >/dev/null 2>&1 || true
+  docker rm -fv "$name-pg" "$name-valkey" "$name-neo4j" >/dev/null 2>&1 || true
   rm -rf "$run"
 }
 trap cleanup EXIT
@@ -22,7 +22,7 @@ trap cleanup EXIT
 for p in 5181 5182 5183; do
   if lsof -nP -iTCP:$p -sTCP:LISTEN >/dev/null 2>&1; then echo "port $p is in use: stop what holds it first"; exit 1; fi
 done
-docker run -d --name "$name-pg" -e POSTGRES_PASSWORD=load -e POSTGRES_DB=social -p 127.0.0.1::5432 postgres:17 >/dev/null
+docker run -d --name "$name-pg" -e POSTGRES_PASSWORD=load -e POSTGRES_DB=social -p 127.0.0.1::5432 postgres:17 -c max_connections=600 >/dev/null
 docker run -d --name "$name-valkey" -p 127.0.0.1::6379 valkey/valkey:8.1 >/dev/null
 docker run -d --name "$name-neo4j" -e NEO4J_AUTH=none -p 127.0.0.1::7687 neo4j:5.26-community >/dev/null
 port() { docker port "$1" "$2/tcp" | head -1 | sed 's/.*://'; }
@@ -31,12 +31,13 @@ for _ in $(seq 1 60); do docker exec "$name-pg" pg_isready -U postgres >/dev/nul
 for _ in $(seq 1 90); do docker logs "$name-neo4j" 2>&1 | grep -q "Started." && break; sleep 1; done
 sleep 2
 
-# Development settings (the local token issuer), with this run's stores. Throwaway values only.
+# Development settings (the local token issuer), with this run's stores. Throwaway values only. Three
+# hosts with a pool per module and read side each: PostgreSQL takes 600 connections, each pool 20.
 export ASPNETCORE_ENVIRONMENT=Development
 export ConnectionStrings__Owner="Host=127.0.0.1;Port=$pg;Database=social;Username=postgres;Password=load"
 for module in Accounts Relationships Posts Timeline Recommendations Notifications; do
   lower=$(echo "$module" | tr '[:upper:]' '[:lower:]')
-  export "ConnectionStrings__$module=Host=127.0.0.1;Port=$pg;Database=social;Username=${lower}_app;Password=${lower}_load;Maximum Pool Size=30"
+  export "ConnectionStrings__$module=Host=127.0.0.1;Port=$pg;Database=social;Username=${lower}_app;Password=${lower}_load;Maximum Pool Size=20"
 done
 export ConnectionStrings__Valkey="127.0.0.1:$valkey,abortConnect=false"
 export Graph__Uri="bolt://127.0.0.1:$bolt"

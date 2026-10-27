@@ -13,7 +13,7 @@ mutations=(
   "3#src/Modules/Timeline/Timeline.Application/ReadFeed.cs#cursor is null || entry.Score < cursor.Score#cursor is null || entry.Score <= cursor.Score#Invariant_3_no_repeats_no_gaps"
   "4#src/Modules/Posts/Posts.Application/Posts.cs#await outbox.Add(new PostPublished(#await Task.CompletedTask; _ = (new PostPublished(#Invariant_4_a_stored_post_reaches_its_followers"
   "5#src/Modules/Timeline/Timeline.Infrastructure/ValkeyTimelines.cs#var score = TimelineRules.Score(postId);#var score = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();#Invariant_5_position_by_time_not_arrival"
-  "6#src/Modules/Relationships/Relationships.Infrastructure/Persistence/SqlRelationshipStore.cs#SET followers = followers - 1 WHERE account_id = @followee#SET followers = followers WHERE account_id = @followee#Invariant_6_counts_equal_facts"
+  "6#src/Modules/Relationships/Relationships.Infrastructure/Persistence/SqlRelationshipStore.cs#(\"delta\", -1)#(\"delta\", 0)#Invariant_6_counts_equal_facts"
   "7#src/BuildingBlocks/Social.BuildingBlocks.Infrastructure/IdempotentRequests.cs#{ Length: > 0 and <= 100 } key ? key : null#{ Length: > 0 and <= 100 } key ? key + Guid.NewGuid() : null#Invariant_7_a_retry_is_not_a_second_post"
 )
 

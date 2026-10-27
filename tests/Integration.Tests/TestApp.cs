@@ -94,6 +94,10 @@ public abstract class IntegrationTest(Postgres postgres) : IAsyncLifetime
         return host;
     }
 
+    /// <summary>Waits until the counts aggregator has folded the follower ledger (it runs every second).</summary>
+    protected Task LedgerFolded() =>
+        Eventually(async () => await Db.Scalar<long>("SELECT count(*) FROM relationships.follow_changes") == 0);
+
     protected static async Task Eventually(Func<Task<bool>> condition, int seconds = 10)
     {
         var until = DateTime.UtcNow.AddSeconds(seconds);
