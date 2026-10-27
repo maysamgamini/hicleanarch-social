@@ -29,6 +29,8 @@ jobs:
           done
       - name: Architecture tests
         run: dotnet test tests/Architecture.Tests --no-build
+      - name: Every number in docs/numbers.md says what it is
+        run: scripts/check-numbers.sh
       - name: The openCypher lint
         run: dotnet test tests/Graph.Tests --no-build --filter "FullyQualifiedName~CypherLintTests"
       - name: Graph tests (Neo4j 5.26 in Testcontainers; the Neptune run is skipped without NEPTUNE_ENDPOINT)

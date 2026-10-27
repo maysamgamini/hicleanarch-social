@@ -3,7 +3,9 @@
 # web task and worker tasks as local processes of the same build, and k6 (grafana/k6, a separate
 # tool) driving the API. A worker is added at a third of the run and the first one stopped at two
 # thirds: the run must have no errors. Prints k6's summary: a local measurement.
-#   scripts/load-local.sh [duration, default 60s] [scenario: baseline (default) or celebrity]
+#   scripts/load-local.sh [duration, default 60s] [scenario: baseline (default), celebrity or round2]
+# round2 (s3-l16): posting, feed reads, a celebrity's read storm, returning users and who to follow, at
+# once, with 150 people (PEOPLE_COUNT overrides); its numbers go to docs/numbers.md as local measurements.
 # celebrity (s3-l06): every reader follows one pulled author and refreshes; the script reports the
 # queries PostgreSQL received for that author's newest posts, per second, on the one web task.
 set -euo pipefail
@@ -59,12 +61,13 @@ host() { dotnet "$run/app/Social.Host.dll" "$@"; }
 host migrate
 docker exec "$name-pg" psql -U postgres -d social -qc "CREATE EXTENSION IF NOT EXISTS pg_stat_statements" >/dev/null
 
-# 50 people, each with a local token.
-python3 - "$run" <<'PY'
+# The people of the run (50; 150 for round2), each with a local token.
+count=${PEOPLE_COUNT:-$([[ $scenario == round2 ]] && echo 150 || echo 50)}
+python3 - "$run" "$count" <<'PY'
 import json, subprocess, sys, uuid
 run = sys.argv[1]
 people = []
-for i in range(50):
+for i in range(int(sys.argv[2])):
     pid = str(uuid.uuid4())
     token = subprocess.check_output(["dotnet", f"{run}/app/Social.Host.dll", "token", pid], text=True).strip().splitlines()[-1]
     people.append({"id": pid, "handle": f"load_{i}_{pid[:6]}", "token": token})
@@ -84,7 +87,7 @@ seconds=${duration%s}
 ( sleep $((2 * seconds / 3)); kill -TERM "$worker_a" ) &
 
 # The script on standard input and the people in a variable: no folder to share with Docker's VM.
-if [[ $scenario == celebrity ]]; then
+if [[ $scenario == celebrity || $scenario == round2 ]]; then
   # The first person is the pulled author, put in the registry as 25,000 followers would have (an hour ago).
   star=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[0]["id"].replace("-",""))' "$run/people.json")
   docker exec "$name-valkey" valkey-cli HSET fanout:registry "$star" "$(( ($(date +%s) - 3600) * 1000 )):" >/dev/null
@@ -97,7 +100,7 @@ elapsed=$(( $(date +%s) - started ))
 sleep 5 # the remaining worker hands on what the run committed last
 echo "undelivered events left: $(docker exec "$name-pg" psql -U postgres -d social -tAc \
   "SELECT (SELECT count(*) FROM relationships.outbox WHERE delivered_at IS NULL) + (SELECT count(*) FROM posts.outbox WHERE delivered_at IS NULL)")"
-if [[ $scenario == celebrity ]]; then
+if [[ $scenario == celebrity || $scenario == round2 ]]; then
   # GetRecentByAuthor's statement (one author, newest first): the only query that reads a pulled author's posts.
   calls=$(docker exec "$name-pg" psql -U postgres -d social -tAc \
     "SELECT coalesce(sum(calls), 0) FROM pg_stat_statements WHERE query LIKE '%FROM posts.posts%WHERE author_id = \$1 AND status%ORDER BY id DESC LIMIT%'")
