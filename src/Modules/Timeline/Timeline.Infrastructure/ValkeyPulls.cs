@@ -1,3 +1,7 @@
+using Microsoft.Extensions.DependencyInjection;
+
+using Social.BuildingBlocks.Infrastructure.Valkey;
+
 using StackExchange.Redis;
 
 using Timeline.Application;
@@ -11,9 +15,9 @@ namespace Timeline.Infrastructure;
 /// not a set, because the push and pull overlaps need the two times. It holds a few thousand authors
 /// at most, so a read takes it whole.
 /// Each reader's pull list as a string, <c>pulls:{reader}</c>, the ids joined by commas, with a
-/// 10-minute expiry; an empty string is a cached "none".
+/// 10-minute expiry; an empty string is a cached "none". Both live in the short-lived store (s3-l08).
 /// </summary>
-internal sealed class ValkeyPulls(IConnectionMultiplexer valkey) : IPullRegistry, IPullLists
+internal sealed class ValkeyPulls([FromKeyedServices(ValkeyRegistration.ShortLived)] IConnectionMultiplexer valkey) : IPullRegistry, IPullLists
 {
     public const string RegistryKey = "fanout:registry";
 

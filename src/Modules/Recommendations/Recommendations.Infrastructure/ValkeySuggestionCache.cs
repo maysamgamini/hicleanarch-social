@@ -3,15 +3,20 @@ using System.Text.Json;
 using Recommendations.Application;
 using Recommendations.Domain;
 
+using Microsoft.Extensions.DependencyInjection;
+
+using Social.BuildingBlocks.Infrastructure.Valkey;
+
 using StackExchange.Redis;
 
 namespace Recommendations.Infrastructure;
 
 /// <summary>
-/// Computed lists in Valkey, under Recommendations' own prefix: rec:sugg:{reader}:{kind}, one hour.
+/// Computed lists in Valkey, under Recommendations' own prefix: rec:sugg:{reader}:{kind}, one hour,
+/// in the short-lived store (s3-l08).
 /// A cache that cannot be reached is a miss: suggestions are computed again, never refused.
 /// </summary>
-internal sealed class ValkeySuggestionCache(IConnectionMultiplexer valkey) : ISuggestionCache
+internal sealed class ValkeySuggestionCache([FromKeyedServices(ValkeyRegistration.ShortLived)] IConnectionMultiplexer valkey) : ISuggestionCache
 {
     public static readonly TimeSpan Keep = TimeSpan.FromHours(1);
 

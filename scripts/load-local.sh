@@ -28,7 +28,10 @@ for p in 5181 5182 5183; do
 done
 docker run -d --name "$name-pg" -e POSTGRES_PASSWORD=load -e POSTGRES_DB=social -p 127.0.0.1::5432 postgres:17 \
   -c shared_preload_libraries=pg_stat_statements -c max_connections=600 >/dev/null
-docker run -d --name "$name-valkey" -p 127.0.0.1::6379 valkey/valkey:8.1 >/dev/null
+# One Valkey with the timeline store's settings; ConnectionStrings:ValkeyShort is left unset, so the
+# short-lived keys share it (the program's fallback), and the celebrity setup writes the registry here.
+docker run -d --name "$name-valkey" -p 127.0.0.1::6379 valkey/valkey:8.1 \
+  valkey-server --zset-max-listpack-entries 1024 --maxmemory-policy volatile-ttl >/dev/null
 docker run -d --name "$name-neo4j" -e NEO4J_AUTH=none -p 127.0.0.1::7687 neo4j:5.26-community >/dev/null
 port() { docker port "$1" "$2/tcp" | head -1 | sed 's/.*://'; }
 pg=$(port "$name-pg" 5432); valkey=$(port "$name-valkey" 6379); bolt=$(port "$name-neo4j" 7687)

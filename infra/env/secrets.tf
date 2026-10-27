@@ -80,3 +80,15 @@ resource "aws_secretsmanager_secret_version" "valkey" {
   secret_string_wo         = "${local.valkey_address}:6379,ssl=true,abortConnect=false"
   secret_string_wo_version = 1
 }
+
+# The short-lived store's address (valkey.tf, s3-l08).
+resource "aws_secretsmanager_secret" "valkey_short" {
+  name                    = "${var.project}/sandbox/valkey-short"
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "valkey_short" {
+  secret_id                = aws_secretsmanager_secret.valkey_short.id
+  secret_string_wo         = "${local.valkey_short_address}:6379,ssl=true,abortConnect=false"
+  secret_string_wo_version = 1
+}

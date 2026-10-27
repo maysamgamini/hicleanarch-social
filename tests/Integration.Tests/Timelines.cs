@@ -11,7 +11,19 @@ public sealed class Timelines(string configuration) : IAsyncDisposable
 
     public static RedisKey Key(Guid owner) => "tl:" + owner.ToString("N");
 
-    public static string Member(Guid post) => post.ToString("N");
+    /// <summary>A post's member as the program writes it since s3-l08: its 16 bytes, big-endian.</summary>
+    public static RedisValue Member(Guid post) => post.ToByteArray(bigEndian: true);
+
+    /// <summary>The member form before s3-l08: 32 hex digits.</summary>
+    public static RedisValue HexMember(Guid post) => post.ToString("N");
+
+    /// <summary>A member read back, in either form; null for the sentinel.</summary>
+    public static Guid? PostOf(RedisValue member) => ((byte[])member!).Length switch
+    {
+        16 => new Guid((byte[])member!, bigEndian: true),
+        32 => Guid.ParseExact(member.ToString(), "N"),
+        _ => null,
+    };
 
     /// <summary>Makes timelines exist, empty but for the sentinel, as a reader's first read would.</summary>
     public async Task Create(IEnumerable<Guid> owners)

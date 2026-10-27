@@ -49,7 +49,7 @@ public sealed class PeopleYouMayKnowTests(Postgres postgres) : IntegrationTest(p
         await base.InitializeAsync();
         _host = StartHost(services => services.AddSingleton<IGraphReads>(sp => _reads = new CountingReads(sp.GetRequiredService<Neo4jGraph>())));
         _people = new People(_host);
-        _valkey = (await ConnectionMultiplexer.ConnectAsync(Db.Valkey)).GetDatabase();
+        _valkey = (await ConnectionMultiplexer.ConnectAsync(Db.ValkeyShort)).GetDatabase();
     }
 
     private async Task<List<Guid>> Pymk(Guid reader) =>

@@ -25,7 +25,7 @@ public static class PullRules
     /// A demoted author is still pulled for 3 days, Round 2's timeline expiry: the posts that were not
     /// pushed while the author was pulled are still found until every timeline that lacks them has expired.
     /// </summary>
-    public static readonly TimeSpan PullAfterDemotion = TimeSpan.FromDays(3);
+    public static readonly TimeSpan PullAfterDemotion = TimelineRules.Expiry;
 
     /// <summary>The time a feed read gives each pulled author's posts; a slower author is skipped for this page.</summary>
     public static readonly TimeSpan Budget = TimeSpan.FromMilliseconds(25);

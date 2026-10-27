@@ -37,7 +37,7 @@ public static class TimelineModule
             throw new InvalidOperationException("ConnectionStrings:Valkey is not set: Timeline keeps its timelines there.");
         }
 
-        services.AddSharedValkey(configuration);
+        services.AddShortLivedValkey(configuration);
         var connectionString = configuration.GetConnectionString("Timeline")
             ?? throw new InvalidOperationException("ConnectionStrings:Timeline is not set.");
         services.AddDbContext<TimelineDbContext>(db => TimelineDbOptions.Configure((DbContextOptionsBuilder<TimelineDbContext>)db, connectionString));
@@ -51,6 +51,7 @@ public static class TimelineModule
         services.AddHostedService(sp => sp.GetRequiredService<FanoutWorkers>());
         services.AddSingleton<IStopParticipant>(sp => sp.GetRequiredService<FanoutWorkers>());
         services.AddHostedService<RebuildWorkers>();
+        services.AddHostedService<TimelineConversion>();
         services.AddSingleton(new ModuleDatabase("Timeline", TimelineDbContext.Schema, connectionString));
         var keys = configuration.GetSection("Timeline:Cursor:Keys");
         services.AddSingleton(new FeedCursors(new CursorKeys(

@@ -75,7 +75,7 @@ public sealed class FanoutTests(Postgres postgres) : IntegrationTest(postgres)
         await Port.AddToExisting([reader], older, Ct);
 
         var newestFirst = await _timelines.Db.SortedSetRangeByRankAsync(Timelines.Key(reader), order: Order.Descending);
-        Assert.Equal([Timelines.Member(newer), Timelines.Member(older), "_"], newestFirst.Select(m => m.ToString()));
+        Assert.Equal([newer, older, null], newestFirst.Select(Timelines.PostOf));
     }
 
     [Fact]

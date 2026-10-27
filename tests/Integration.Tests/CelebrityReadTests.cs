@@ -46,7 +46,7 @@ public sealed class CelebrityReadTests(Postgres postgres) : IntegrationTest(post
 
     private async Task Promote(Guid author)
     {
-        await using var timelines = new Timelines(Db.Valkey);
+        await using var timelines = new Timelines(Db.ValkeyShort); // the short-lived store
         await timelines.Db.HashSetAsync("fanout:registry", author.ToString("N"), $"{DateTimeOffset.UtcNow.AddHours(-1).ToUnixTimeMilliseconds()}:");
     }
 

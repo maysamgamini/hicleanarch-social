@@ -66,7 +66,7 @@ public static class RecommendationsModule
             throw new InvalidOperationException("ConnectionStrings:Valkey is not set: suggestions are cached there.");
         }
 
-        services.AddSharedValkey(configuration);
+        services.AddShortLivedValkey(configuration);
         return services
             .AddRecommendationsApplication()
             .AddSingleton<Neo4jGraph>()

@@ -50,8 +50,9 @@ provider "aws" {
 
 # database.tf and valkey.tf are not applied here; the secrets need only their host names.
 locals {
-  db_host        = "database.moto.invalid"
-  valkey_address = "valkey.moto.invalid"
+  db_host              = "database.moto.invalid"
+  valkey_address       = "valkey.moto.invalid"
+  valkey_short_address = "valkey-short.moto.invalid"
 }
 HCL
 

@@ -15,9 +15,20 @@ services:
       interval: 2s
       retries: 30
 
+  # The timeline store (s3-l08): sorted sets compact up to 1,024 entries, eviction by TTL.
   valkey:
     image: valkey/valkey:8.1
+    command: ["valkey-server", "--zset-max-listpack-entries", "1024", "--maxmemory-policy", "volatile-ttl"]
     ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 2s
+      retries: 30
+
+  # The short-lived store (s3-l08): locks, pull lists, the registry, suggestion lists.
+  valkey-short:
+    image: valkey/valkey:8.1
+    ports: ["6380:6379"]
     healthcheck:
       test: ["CMD", "valkey-cli", "ping"]
       interval: 2s

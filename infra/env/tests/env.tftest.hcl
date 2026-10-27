@@ -258,3 +258,30 @@ run "one_image_two_roles_two_services_each_scaling_on_its_own" {
     error_message = "Each role scales on its own signal."
   }
 }
+
+run "the_timeline_store_holds_only_compact_timelines_and_short_lived_keys_live_apart" {
+  command = apply
+
+  assert {
+    condition = alltrue([
+      for p in aws_elasticache_parameter_group.timelines.parameter :
+      (p.name == "zset-max-listpack-entries" && p.value == "1024") || (p.name == "maxmemory-policy" && p.value == "volatile-ttl")
+    ]) && length(aws_elasticache_parameter_group.timelines.parameter) == 2
+    error_message = "The timeline store keeps sorted sets compact up to 1,024 entries and evicts by TTL."
+  }
+
+  assert {
+    condition     = aws_elasticache_replication_group.valkey.parameter_group_name == aws_elasticache_parameter_group.timelines.name
+    error_message = "The timeline store runs with the timelines' parameters."
+  }
+
+  assert {
+    condition     = aws_elasticache_replication_group.short_lived.transit_encryption_enabled && aws_elasticache_replication_group.short_lived.engine == "valkey"
+    error_message = "The short-lived store is a second Valkey, over TLS."
+  }
+
+  assert {
+    condition     = strcontains(aws_ecs_task_definition.api.container_definitions, "ConnectionStrings__ValkeyShort") && strcontains(aws_ecs_task_definition.worker.container_definitions, "ConnectionStrings__ValkeyShort")
+    error_message = "Both roles get the short-lived store's address from its secret."
+  }
+}

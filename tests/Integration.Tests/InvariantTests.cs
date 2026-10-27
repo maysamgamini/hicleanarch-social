@@ -167,7 +167,7 @@ public sealed class InvariantTests(Postgres postgres) : IntegrationTest(postgres
         }
 
         var oldestFirst = await timelines.Db.SortedSetRangeByScoreAsync(Timelines.Key(reader), start: 1);
-        Assert.Equal(written.Select(Timelines.Member), oldestFirst.Select(m => m.ToString()));
+        Assert.Equal(written.Select(p => (Guid?)p), oldestFirst.Select(Timelines.PostOf));
     }
 
     [Fact]

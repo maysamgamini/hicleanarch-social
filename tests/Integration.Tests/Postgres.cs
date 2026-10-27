@@ -30,12 +30,23 @@ public sealed class Postgres : IAsyncLifetime
 
     // Valkey as ElastiCache runs it: a plain container, ready when it says so. Tests share it and
     // never collide, because every key names accounts or posts with fresh ids.
+    // The timeline store as Round 2 sets it (s3-l08): sorted sets compact up to 1,024 entries, and
+    // eviction by TTL. It holds only timelines.
     private readonly IContainer _valkey = new ContainerBuilder("valkey/valkey:8.1")
+        .WithCommand("valkey-server", "--zset-max-listpack-entries", "1024", "--maxmemory-policy", "volatile-ttl")
         .WithPortBinding(6379, true)
         .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged("Ready to accept connections"))
         .Build();
 
     public string Valkey => $"{_valkey.Hostname}:{_valkey.GetMappedPublicPort(6379)},abortConnect=false";
+
+    // The short-lived store (s3-l08): locks, pull lists, the registry, suggestion lists.
+    private readonly IContainer _valkeyShort = new ContainerBuilder("valkey/valkey:8.1")
+        .WithPortBinding(6379, true)
+        .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged("Ready to accept connections"))
+        .Build();
+
+    public string ValkeyShort => $"{_valkeyShort.Hostname}:{_valkeyShort.GetMappedPublicPort(6379)},abortConnect=false";
 
     // The graph database Recommendations projects into, authentication off. Tests share it: every
     // account has a fresh id, so no two tests meet.
@@ -50,9 +61,9 @@ public sealed class Postgres : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        await Task.WhenAll(_container.StartAsync(), _valkey.StartAsync(), _neo4j.StartAsync());
+        await Task.WhenAll(_container.StartAsync(), _valkey.StartAsync(), _valkeyShort.StartAsync(), _neo4j.StartAsync());
         await Execute(_container.GetConnectionString(), $"CREATE DATABASE {Template}");
-        var template = new TestDatabase(At(Template), Valkey, Graph);
+        var template = new TestDatabase(At(Template), Valkey, Graph, ValkeyShort);
         await using (var host = TestApp.Start(template))
         {
             await host.Services.GetRequiredService<DatabaseMigrator>().Run(template.Owner, CancellationToken.None);
@@ -65,6 +76,7 @@ public sealed class Postgres : IAsyncLifetime
     {
         await _container.DisposeAsync();
         await _valkey.DisposeAsync();
+        await _valkeyShort.DisposeAsync();
         await _neo4j.DisposeAsync();
     }
 
@@ -84,7 +96,7 @@ public sealed class Postgres : IAsyncLifetime
 
         // TEMPORARY is a right on the database itself, which a copy does not inherit from its template.
         await Execute(_container.GetConnectionString(), $"REVOKE TEMPORARY ON DATABASE {name} FROM PUBLIC");
-        return new TestDatabase(At(name), Valkey, Graph);
+        return new TestDatabase(At(name), Valkey, Graph, ValkeyShort);
     }
 
     private string At(string database) => new NpgsqlConnectionStringBuilder(_container.GetConnectionString())
@@ -105,9 +117,13 @@ public sealed class Postgres : IAsyncLifetime
 }
 
 /// <summary>One test's database: the owner's connection, each module role's, and the shared Valkey.</summary>
-public sealed class TestDatabase(string owner, string valkey, string graph)
+public sealed class TestDatabase(string owner, string valkey, string graph, string valkeyShort)
 {
+    /// <summary>The timeline store.</summary>
     public string Valkey { get; } = valkey;
+
+    /// <summary>The short-lived store: locks, pull lists, the pulled-author registry, suggestion lists.</summary>
+    public string ValkeyShort { get; } = valkeyShort;
 
     public string Graph { get; } = graph;
 

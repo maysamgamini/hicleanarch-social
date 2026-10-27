@@ -14,6 +14,7 @@ locals {
     }],
     [
       { name = "ConnectionStrings__Valkey", valueFrom = aws_secretsmanager_secret.valkey.arn },
+      { name = "ConnectionStrings__ValkeyShort", valueFrom = aws_secretsmanager_secret.valkey_short.arn },
       { name = "Timeline__Cursor__Keys__Current", valueFrom = aws_secretsmanager_secret.cursor_key.arn },
     ],
   )

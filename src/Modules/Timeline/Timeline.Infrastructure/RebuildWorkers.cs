@@ -6,13 +6,14 @@ using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
 
 using Social.BuildingBlocks.Application;
+using Social.BuildingBlocks.Infrastructure.Valkey;
 
 using Timeline.Application;
 
 namespace Timeline.Infrastructure;
 
-/// <summary>The rebuild lock: <c>rebuild:{reader}</c>, SET NX EX 60, deleted when the rebuild ends.</summary>
-internal sealed class ValkeyRebuildLock(IConnectionMultiplexer valkey) : IRebuildLock
+/// <summary>The rebuild lock: <c>rebuild:{reader}</c>, SET NX EX 60, deleted when the rebuild ends; in the short-lived store.</summary>
+internal sealed class ValkeyRebuildLock([FromKeyedServices(ValkeyRegistration.ShortLived)] IConnectionMultiplexer valkey) : IRebuildLock
 {
     public static RedisKey Key(Guid reader) => "rebuild:" + reader.ToString("N");
 

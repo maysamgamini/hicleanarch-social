@@ -18,15 +18,19 @@ public sealed class HybridFanoutTests(Postgres postgres) : IntegrationTest(postg
 {
     private Timelines _timelines = null!;
 
+    private Timelines _shortLived = null!;
+
     public override async ValueTask InitializeAsync()
     {
         await base.InitializeAsync();
         _timelines = new Timelines(Db.Valkey);
+        _shortLived = new Timelines(Db.ValkeyShort);
     }
 
     public override async ValueTask DisposeAsync()
     {
         await _timelines.DisposeAsync();
+        await _shortLived.DisposeAsync();
         await base.DisposeAsync();
     }
 
@@ -45,10 +49,10 @@ public sealed class HybridFanoutTests(Postgres postgres) : IntegrationTest(postg
 
     /// <summary>Puts the author in the registry as Relationships' counts would have: promoted that long ago.</summary>
     private Task<bool> Promote(Guid author, TimeSpan ago, TimeSpan? demotedAgo = null) =>
-        _timelines.Db.HashSetAsync("fanout:registry", author.ToString("N"),
+        _shortLived.Db.HashSetAsync("fanout:registry", author.ToString("N"),
             $"{(DateTimeOffset.UtcNow - ago).ToUnixTimeMilliseconds()}:{(demotedAgo is { } d ? (DateTimeOffset.UtcNow - d).ToUnixTimeMilliseconds() : "")}");
 
-    private Task<bool> ForgetPullList(Guid reader) => _timelines.Db.KeyDeleteAsync("pulls:" + reader.ToString("N"));
+    private Task<bool> ForgetPullList(Guid reader) => _shortLived.Db.KeyDeleteAsync("pulls:" + reader.ToString("N"));
 
     private Task FannedOut(Guid post) =>
         Eventually(async () => await Db.Scalar<bool>("SELECT count(*) = 1 FROM timeline.fanout_progress WHERE post_id = @p AND completed_at IS NOT NULL", ("p", post)));
@@ -240,6 +244,6 @@ public sealed class HybridFanoutTests(Postgres postgres) : IntegrationTest(postg
         Assert.NotNull(promoted);
         Assert.Equal(promoted, await Observe(20_000)); // between the two lines: unchanged
         Assert.NotNull((await Observe(19_999))!.DemotedAt);
-        Assert.True(await _timelines.Db.HashExistsAsync("fanout:registry", author.ToString("N")));
+        Assert.True(await _shortLived.Db.HashExistsAsync("fanout:registry", author.ToString("N")));
     }
 }

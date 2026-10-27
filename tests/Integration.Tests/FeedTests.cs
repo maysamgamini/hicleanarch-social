@@ -144,7 +144,7 @@ public sealed class FeedTests(Postgres postgres) : IntegrationTest(postgres)
         await people.Follow(reader, ada);
         await Feed(people.As(reader));
         await TimelineBuilt(reader);
-        Assert.InRange((await timelines.Db.KeyTimeToLiveAsync(Timelines.Key(reader)))!.Value, TimeSpan.FromDays(6.9), TimeSpan.FromDays(7));
+        Assert.InRange((await timelines.Db.KeyTimeToLiveAsync(Timelines.Key(reader)))!.Value, TimeSpan.FromDays(2.9), TimeSpan.FromDays(3));
         await timelines.Db.KeyExpireAsync(Timelines.Key(reader), TimeSpan.FromMinutes(10));
 
         var post = await people.Post(ada, "Fanned out");
@@ -154,7 +154,7 @@ public sealed class FeedTests(Postgres postgres) : IntegrationTest(postgres)
         var afterRead = await timelines.Db.KeyTimeToLiveAsync(Timelines.Key(reader));
 
         Assert.True(afterFanout <= TimeSpan.FromMinutes(10), $"A fanout moved the expiry to {afterFanout}.");
-        Assert.True(afterRead > TimeSpan.FromDays(6.9), $"A read left the expiry at {afterRead}.");
+        Assert.True(afterRead > TimeSpan.FromDays(2.9), $"A read left the expiry at {afterRead}.");
     }
 
     [Fact]

@@ -22,7 +22,7 @@ resource "aws_iam_role_policy_attachment" "execution" {
 data "aws_iam_policy_document" "read_connection_strings" {
   statement {
     actions   = ["secretsmanager:GetSecretValue"]
-    resources = concat([for s in aws_secretsmanager_secret.connection : s.arn], [aws_secretsmanager_secret.valkey.arn, aws_secretsmanager_secret.cursor_key.arn])
+    resources = concat([for s in aws_secretsmanager_secret.connection : s.arn], [aws_secretsmanager_secret.valkey.arn, aws_secretsmanager_secret.valkey_short.arn, aws_secretsmanager_secret.cursor_key.arn])
   }
 }
 

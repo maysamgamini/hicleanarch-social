@@ -33,7 +33,7 @@ public sealed class SuggestionTests(Postgres postgres) : IntegrationTest(postgre
         List<(Guid Id, long Mutual)> suggested = [];
         await Eventually(async () =>
         {
-            var reply = await Fresh(people.As(me), Db.Valkey, me);
+            var reply = await Fresh(people.As(me), Db.ValkeyShort, me);
             suggested = [.. reply.GetProperty("items").EnumerateArray().Select(i => (i.GetProperty("account_id").GetGuid(), i.GetProperty("mutual").GetInt64()))];
             // Every follow projected: carol counted through both friends, not only the first to arrive.
             return suggested.SequenceEqual([(carol, 2L), (dan, 1L)]);
@@ -49,7 +49,7 @@ public sealed class SuggestionTests(Postgres postgres) : IntegrationTest(postgre
         var (me, ada, carol) = (await people.SignUp(), await people.SignUp(), await people.SignUp());
         await people.Follow(me, ada);
         await people.Follow(ada, carol);
-        await Eventually(async () => (await Fresh(people.As(me), Db.Valkey, me)).GetProperty("items").GetArrayLength() == 1, seconds: 30);
+        await Eventually(async () => (await Fresh(people.As(me), Db.ValkeyShort, me)).GetProperty("items").GetArrayLength() == 1, seconds: 30);
 
         await people.As(carol).PutAsync($"/v1/accounts/{me}/block", null, Ct);
 
