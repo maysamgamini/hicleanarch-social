@@ -25,9 +25,13 @@ public sealed record FeedPage(IReadOnlyList<FeedItem> Items, string? NextCursor)
 /// The read filter decides what a page may show, whatever the timeline still holds: a post whose
 /// author is hidden from the reader (a block either way, or the reader's mute), is not active, or is
 /// no longer followed by the reader is dropped; the reader's own posts are always kept.
+/// Hybrid fanout: the timeline is merged with the newest posts of the pulled authors the reader
+/// follows, read at read time, deduplicated by post id (a post pushed before its author was promoted
+/// is shown once) and ordered as the timeline orders: by score, then by post id, newest first.
 /// </summary>
 public sealed class ReadFeedHandler(
-    ITimelines timelines, IPostSummaries posts, IProfiles profiles, IFollowing following, IHiddenAuthors hidden, ISeenPosts seen, FeedCursors cursors)
+    ITimelines timelines, IPostSummaries posts, IProfiles profiles, IFollowing following, IHiddenAuthors hidden, ISeenPosts seen, FeedCursors cursors,
+    PulledReads? pulls = null)
     : IQueryHandler<ReadFeed, FeedPage>
 {
     public const int DefaultLimit = 20;
@@ -76,13 +80,27 @@ public sealed class ReadFeedHandler(
             items.AddRange((await Hydrate([.. entries.Where(e => After(e, after))], cancellationToken)).Where(filter.Shows));
         }
 
+        // The pulled side, after the timeline: the two share this request's module reads, one at a time.
+        var (pulled, pulledFull) = pulls is null ? ([], false) : await PullPage(reader, followed, after, limit + 5, cancellationToken);
+        var merged = items.Concat(pulled.Where(filter.Shows)).DistinctBy(i => i.Post.PostId)
+            .OrderByDescending(i => TimelineRules.Score(i.Post.PostId))
+            .ThenByDescending(i => TimelineRules.Member(i.Post.PostId), StringComparer.Ordinal)
+            .ToList();
+
         // Only a read keeps a timeline alive; a fanout never does.
         await timelines.Touch(reader, cancellationToken);
-        var page = items.Take(limit).ToList();
+        var page = merged.Take(limit).ToList();
         await seen.Saw(reader, [.. page.Select(i => i.Post)], cancellationToken);
-        var more = page.Count > 0 && (items.Count > limit || !exhausted);
+        var more = page.Count > 0 && (merged.Count > limit || !exhausted || pulledFull);
         var next = more ? cursors.Issue(reader, new FeedPosition(TimelineRules.Score(page[^1].Post.PostId), page[^1].Post.PostId)) : null;
         return Result.Success(new FeedPage(page, next));
+    }
+
+    private async Task<(IReadOnlyList<FeedItem> Items, bool Full)> PullPage(Guid reader, IReadOnlySet<Guid> followed, FeedPosition? after, int want, CancellationToken cancellationToken)
+    {
+        var authors = await pulls!.PullListOf(reader, followed, cancellationToken);
+        // A post id is the timeline's (score, id) order: "older than the cursor's post" is the tie filter itself.
+        return await pulls.Read([.. authors.Where(a => a != reader)], after?.PostId, want, cancellationToken);
     }
 
     /// <summary>The tie filter: at the cursor's own score, only ids below the cursor's are still to come.</summary>

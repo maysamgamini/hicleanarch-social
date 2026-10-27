@@ -1,3 +1,5 @@
+using Microsoft.Extensions.DependencyInjection;
+
 using Accounts.Contracts;
 
 using Posts.Contracts;
@@ -27,7 +29,7 @@ internal sealed class FanOutOnPostPublished(IDispatcher dispatcher) : IIntegrati
 {
     public async Task Handle(PostPublished integrationEvent, CancellationToken cancellationToken)
     {
-        var result = await dispatcher.Send<StartFanout, Timeline.Domain.FanoutPool>(new StartFanout(integrationEvent.PostId, integrationEvent.AuthorId, integrationEvent.CreatedAt), cancellationToken);
+        var result = await dispatcher.Send<StartFanout, Timeline.Domain.FanoutPool?>(new StartFanout(integrationEvent.PostId, integrationEvent.AuthorId, integrationEvent.CreatedAt), cancellationToken);
         if (!result.IsSuccess)
         {
             throw new InvalidOperationException($"Fanout of {integrationEvent.PostId} failed: {result.Errors[0].Code}");
@@ -121,5 +123,36 @@ internal sealed class InProcessAudience(IDispatcher dispatcher) : IAudience
     {
         var counts = await dispatcher.Query<GetCounts, RelationshipCounts>(new GetCounts(author), cancellationToken);
         return counts.IsSuccess ? counts.Value.Followers : throw new InvalidOperationException(counts.Errors[0].Code);
+    }
+}
+
+/// <summary>
+/// Timeline's IRecentPosts answered in process by Posts' GetRecentByAuthor. Each call has its own
+/// scope (its own Posts connection), so a page's pulled authors are read all at once.
+/// </summary>
+internal sealed class InProcessRecentPosts(IServiceScopeFactory scopes) : IRecentPosts
+{
+    public async Task<IReadOnlyList<PostCard>> Of(Guid author, Guid? before, int limit, CancellationToken cancellationToken)
+    {
+        await using var scope = scopes.CreateAsyncScope();
+        var dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
+        var result = await dispatcher.Query<GetRecentByAuthor, IReadOnlyList<PostSummary>>(new GetRecentByAuthor(author, limit, before), cancellationToken);
+        return result.IsSuccess
+            ? [.. result.Value.Select(p => new PostCard(p.PostId, p.AuthorId, p.Text, p.CreatedAt, p.EditedAt))]
+            : throw new InvalidOperationException($"Posts refused a read: {result.Errors[0].Code}");
+    }
+}
+
+/// <summary>Relationships' FollowerCountChanged keeps the registry of pulled authors: the count is never queried.</summary>
+internal sealed class RegistryOnFollowerCount(IDispatcher dispatcher) : IIntegrationEventHandler<FollowerCountChanged>
+{
+    public async Task Handle(FollowerCountChanged integrationEvent, CancellationToken cancellationToken)
+    {
+        var result = await dispatcher.Send<ObserveFollowerCount, Timeline.Domain.PulledAuthor?>(
+            new ObserveFollowerCount(integrationEvent.AccountId, integrationEvent.Followers), cancellationToken);
+        if (!result.IsSuccess)
+        {
+            throw new InvalidOperationException(result.Errors[0].Code);
+        }
     }
 }

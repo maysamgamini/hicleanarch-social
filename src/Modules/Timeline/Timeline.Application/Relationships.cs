@@ -29,7 +29,7 @@ public sealed class RemoveAuthorHandler(ITimelines timelines, IPostSummaries pos
     }
 }
 
-public sealed class AddRecentPostsHandler(ITimelines timelines, IPostSummaries posts) : ICommandHandler<AddRecentPosts, int>
+public sealed class AddRecentPostsHandler(ITimelines timelines, IPostSummaries posts, IPullRegistry registry, TimeProvider clock) : ICommandHandler<AddRecentPosts, int>
 {
     public const int Recent = 20;
 
@@ -38,6 +38,12 @@ public sealed class AddRecentPostsHandler(ITimelines timelines, IPostSummaries p
         if (!await timelines.Exists(command.OwnerId, cancellationToken))
         {
             return Result.Success(0); // the timeline's build will bring them in
+        }
+
+        // A pulled author's posts are read at read time: a new follower's timeline takes none of them.
+        if (await registry.Find(command.AuthorId, cancellationToken) is { } pulled && !pulled.Pushed(clock.GetUtcNow()))
+        {
+            return Result.Success(0);
         }
 
         var recent = await posts.RecentByAuthors([command.AuthorId], Recent, cancellationToken);

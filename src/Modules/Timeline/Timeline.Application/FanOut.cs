@@ -8,7 +8,7 @@ using Timeline.Domain;
 namespace Timeline.Application;
 
 /// <summary>A stored post's fanout is recorded as a job; worker tasks write it a page at a time.</summary>
-public sealed record StartFanout(Guid PostId, Guid AuthorId, DateTimeOffset StoredAt) : ICommand<FanoutPool>;
+public sealed record StartFanout(Guid PostId, Guid AuthorId, DateTimeOffset StoredAt) : ICommand<FanoutPool?>;
 
 /// <summary>A fanout job as a worker holds it: where it stands, and the lease that makes it this worker's.</summary>
 public sealed record FanoutJob(Guid PostId, Guid AuthorId, FanoutPool Pool, Guid? Cursor, bool AuthorDone, long Reached, Guid LeaseToken);
@@ -51,16 +51,28 @@ public interface IAudience
 /// <summary>
 /// PostPublished becomes a job row (and its progress row) in Timeline's schema; the audience size,
 /// read once here, picks the pool. Creating it twice changes nothing.
+/// A pulled author's post is not fanned out: it goes into the author's own timeline only, and is
+/// fanned out (complete) at once, since its followers read it at read time. Null: not fanned out.
 /// </summary>
-public sealed class StartFanoutHandler(IFanoutJobs jobs, IAudience audience, IFanoutProgress progress) : ICommandHandler<StartFanout, FanoutPool>
+public sealed class StartFanoutHandler(IFanoutJobs jobs, IAudience audience, IFanoutProgress progress, IPullRegistry registry, ITimelines timelines, TimeProvider clock)
+    : ICommandHandler<StartFanout, FanoutPool?>
 {
-    public async Task<Result<FanoutPool>> Handle(StartFanout command, CancellationToken cancellationToken)
+    public async Task<Result<FanoutPool?>> Handle(StartFanout command, CancellationToken cancellationToken)
     {
+        var now = clock.GetUtcNow();
+        if (await registry.Find(command.AuthorId, cancellationToken) is { } pulled && !pulled.Pushed(now))
+        {
+            await progress.Start(command.PostId, command.AuthorId, command.StoredAt, cancellationToken);
+            await timelines.AddToExisting([command.AuthorId], command.PostId, cancellationToken);
+            await progress.Complete(command.PostId, now, cancellationToken);
+            return Result.Success<FanoutPool?>(null);
+        }
+
         var size = await audience.Followers(command.AuthorId, cancellationToken);
         var pool = FanoutPools.For(size);
         await progress.Start(command.PostId, command.AuthorId, command.StoredAt, cancellationToken);
         await jobs.Create(command.PostId, command.AuthorId, size, pool, cancellationToken);
-        return Result.Success(pool);
+        return Result.Success<FanoutPool?>(pool);
     }
 }
 
@@ -127,10 +139,11 @@ public static class TimelineApplication
 {
     public static IServiceCollection AddTimelineApplication(this IServiceCollection services) =>
         services
-            .AddScoped<ICommandHandler<StartFanout, FanoutPool>, StartFanoutHandler>()
+            .AddScoped<ICommandHandler<StartFanout, FanoutPool?>, StartFanoutHandler>()
             .AddScoped<FanoutRunner>()
             .AddScoped<IQueryHandler<ReadFeed, FeedPage>, ReadFeedHandler>()
             .AddScoped<ICommandHandler<RemoveAuthor, int>, RemoveAuthorHandler>()
             .AddScoped<ICommandHandler<AddRecentPosts, int>, AddRecentPostsHandler>()
-            .AddScoped<IQueryHandler<GetDelivery, Delivery>, GetDeliveryHandler>();
+            .AddScoped<IQueryHandler<GetDelivery, Delivery>, GetDeliveryHandler>()
+            .AddHybridFanout();
 }

@@ -11,5 +11,5 @@ public sealed record GetPosts(IReadOnlyList<Guid> PostIds) : IQuery<IReadOnlyLis
 /// <summary>Each author's newest active posts, at most <paramref name="PerAuthor"/> each, newest first overall.</summary>
 public sealed record GetRecentByAuthors(IReadOnlyList<Guid> AuthorIds, int PerAuthor) : IQuery<IReadOnlyList<PostSummary>>;
 
-/// <summary>One author's newest active posts, newest first.</summary>
-public sealed record GetRecentByAuthor(Guid AuthorId, int Limit) : IQuery<IReadOnlyList<PostSummary>>;
+/// <summary>One author's newest active posts, newest first; with <paramref name="Before"/>, only posts older than that one (by id, which is time order).</summary>
+public sealed record GetRecentByAuthor(Guid AuthorId, int Limit, Guid? Before = null) : IQuery<IReadOnlyList<PostSummary>>;

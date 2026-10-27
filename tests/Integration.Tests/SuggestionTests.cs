@@ -35,7 +35,8 @@ public sealed class SuggestionTests(Postgres postgres) : IntegrationTest(postgre
         {
             var reply = await Fresh(people.As(me), Db.Valkey, me);
             suggested = [.. reply.GetProperty("items").EnumerateArray().Select(i => (i.GetProperty("account_id").GetGuid(), i.GetProperty("mutual").GetInt64()))];
-            return suggested.Count == 2;
+            // Every follow projected: carol counted through both friends, not only the first to arrive.
+            return suggested.SequenceEqual([(carol, 2L), (dan, 1L)]);
         }, seconds: 30);
 
         Assert.Equal([(carol, 2L), (dan, 1L)], suggested);

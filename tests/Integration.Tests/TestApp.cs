@@ -94,6 +94,16 @@ public abstract class IntegrationTest(Postgres postgres) : IAsyncLifetime
         return host;
     }
 
+    /// <summary>
+    /// Waits until every event committed so far has been handed to its handlers: a follow's backfill
+    /// (FollowStarted) must not race a post the test writes next.
+    /// </summary>
+    protected Task Delivered() =>
+        Eventually(async () => await Db.Scalar<bool>("""
+            SELECT NOT EXISTS (SELECT 1 FROM relationships.outbox WHERE delivered_at IS NULL)
+               AND NOT EXISTS (SELECT 1 FROM posts.outbox WHERE delivered_at IS NULL)
+            """));
+
     /// <summary>Waits until the counts aggregator has folded the follower ledger (it runs every second).</summary>
     protected Task LedgerFolded() =>
         Eventually(async () => await Db.Scalar<long>("SELECT count(*) FROM relationships.follow_changes") == 0);

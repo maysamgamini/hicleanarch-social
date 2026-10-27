@@ -135,6 +135,8 @@ public sealed class InvariantTests(Postgres postgres) : IntegrationTest(postgres
             fan = await people.SignUp();
             await people.Follow(fan, ada);
             await Page(people.As(fan)); // the fan's timeline exists
+            // The follow's backfill is done first: only the post's own fanout can bring the post now.
+            await Delivered();
             post = await people.Post(ada, "stored, then the program stops");
         }
 

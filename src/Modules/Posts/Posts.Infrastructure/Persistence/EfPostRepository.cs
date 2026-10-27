@@ -43,4 +43,15 @@ internal sealed class EfPostRepository(PostsDbContext db) : IPostRepository
                 r => new PostSummary(r.GetGuid(0), r.GetGuid(1), r.GetString(2), r.GetFieldValue<DateTimeOffset>(3),
                     r.IsDBNull(4) ? null : r.GetFieldValue<DateTimeOffset>(4)),
                 cancellationToken, ("authors", authors.ToArray()), ("per", perAuthor));
+
+    // One index range on (author_id, id): the newest first, from just below the page's cursor.
+    public async Task<IReadOnlyList<PostSummary>> RecentByAuthor(Guid author, Guid? before, int limit, CancellationToken cancellationToken) =>
+        await db.Read($"""
+            SELECT id, author_id, text, created_at, edited_at FROM posts.posts
+            WHERE author_id = @author AND status = 'ACTIVE'{(before is null ? "" : " AND id < @before")}
+            ORDER BY id DESC LIMIT @limit
+            """,
+            r => new PostSummary(r.GetGuid(0), r.GetGuid(1), r.GetString(2), r.GetFieldValue<DateTimeOffset>(3),
+                r.IsDBNull(4) ? null : r.GetFieldValue<DateTimeOffset>(4)),
+            cancellationToken, [("author", author), ("before", before ?? Guid.Empty), ("limit", limit)]);
 }

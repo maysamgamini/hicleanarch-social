@@ -21,6 +21,7 @@ using Social.BuildingBlocks.Infrastructure.Valkey;
 using Microsoft.EntityFrameworkCore;
 
 using Timeline.Application;
+using Timeline.Domain;
 using Timeline.Infrastructure.Persistence;
 
 namespace Timeline.Infrastructure;
@@ -61,6 +62,9 @@ public static class TimelineModule
         services.AddEventHandler<AccountBlocked, TimelineUpkeep>(ModuleName.Value);
         services.AddEventHandler<FollowEnded, TimelineUpkeep>(ModuleName.Value);
         services.AddEventHandler<FollowStarted, TimelineUpkeep>(ModuleName.Value);
+        // Hybrid fanout: the registry of pulled authors follows the counts Relationships announces.
+        services.AddEventHandler<FollowerCountChanged, RegistryOnFollowerCount>(ModuleName.Value);
+        services.AddSingleton(new PullOptions(configuration.GetValue("Timeline:Pull:Budget", PullRules.Budget)));
         return services
             .AddTimelineApplication()
             .AddSingleton<ITimelines, ValkeyTimelines>()
@@ -72,6 +76,10 @@ public static class TimelineModule
             .AddScoped<IFanoutProgress, SqlFanoutProgress>()
             .AddScoped<IFanoutJobs, SqlFanoutJobs>()
             .AddScoped<IAudience, InProcessAudience>()
+            .AddSingleton<ValkeyPulls>()
+            .AddSingleton<IPullRegistry>(sp => sp.GetRequiredService<ValkeyPulls>())
+            .AddSingleton<IPullLists>(sp => sp.GetRequiredService<ValkeyPulls>())
+            .AddSingleton<IRecentPosts, InProcessRecentPosts>()
             .AddSingleton<ISeenPosts, SampledSeenPosts>();
     }
 

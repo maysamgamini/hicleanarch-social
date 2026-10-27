@@ -39,6 +39,9 @@ public interface IPostRepository
     Task<IReadOnlyList<PostSummary>> Active(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<PostSummary>> RecentByAuthors(IReadOnlyCollection<Guid> authors, int perAuthor, CancellationToken cancellationToken);
+
+    /// <summary>One author's newest active posts, older than <paramref name="before"/> when given: the pulled side of a feed page.</summary>
+    Task<IReadOnlyList<PostSummary>> RecentByAuthor(Guid author, Guid? before, int limit, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -171,7 +174,7 @@ public sealed class GetRecentByAuthorsHandler(IPostRepository posts) : IQueryHan
 public sealed class GetRecentByAuthorHandler(IPostRepository posts) : IQueryHandler<GetRecentByAuthor, IReadOnlyList<PostSummary>>
 {
     public async Task<Result<IReadOnlyList<PostSummary>>> Handle(GetRecentByAuthor query, CancellationToken cancellationToken) =>
-        Result.Success(await posts.RecentByAuthors([query.AuthorId], Math.Clamp(query.Limit, 1, 800), cancellationToken));
+        Result.Success(await posts.RecentByAuthor(query.AuthorId, query.Before, Math.Clamp(query.Limit, 1, 800), cancellationToken));
 }
 
 public static class PostsApplication
