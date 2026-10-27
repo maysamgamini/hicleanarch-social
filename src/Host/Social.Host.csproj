@@ -17,6 +17,7 @@
   <ItemGroup>
     <ProjectReference Include="..\BuildingBlocks\Social.BuildingBlocks.Infrastructure\Social.BuildingBlocks.Infrastructure.csproj" />
     <ProjectReference Include="..\Modules\Accounts\Accounts.Infrastructure\Accounts.Infrastructure.csproj" />
+    <ProjectReference Include="..\Modules\Relationships\Relationships.Infrastructure\Relationships.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

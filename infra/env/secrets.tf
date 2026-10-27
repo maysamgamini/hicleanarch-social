@@ -9,7 +9,8 @@
 locals {
   # Module: its login role. A module joins this map in the lesson that gives it a schema.
   db_roles = {
-    accounts = "accounts_app"
+    accounts      = "accounts_app"
+    relationships = "relationships_app"
   }
 
   # TLS with the server's certificate checked against the RDS CA bundle, which the image carries.

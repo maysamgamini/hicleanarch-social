@@ -15,9 +15,16 @@
     <Project Path="src/Modules/Accounts/Accounts.Domain/Accounts.Domain.csproj" />
     <Project Path="src/Modules/Accounts/Accounts.Infrastructure/Accounts.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/src/Modules/Relationships/">
+    <Project Path="src/Modules/Relationships/Relationships.Application/Relationships.Application.csproj" />
+    <Project Path="src/Modules/Relationships/Relationships.Contracts/Relationships.Contracts.csproj" />
+    <Project Path="src/Modules/Relationships/Relationships.Domain/Relationships.Domain.csproj" />
+    <Project Path="src/Modules/Relationships/Relationships.Infrastructure/Relationships.Infrastructure.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Accounts.UnitTests/Accounts.UnitTests.csproj" />
     <Project Path="tests/Architecture.Tests/Architecture.Tests.csproj" />
     <Project Path="tests/Integration.Tests/Integration.Tests.csproj" />
+    <Project Path="tests/Relationships.UnitTests/Relationships.UnitTests.csproj" />
   </Folder>
 </Solution>

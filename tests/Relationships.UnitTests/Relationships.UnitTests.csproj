@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Modules\Relationships\Relationships.Domain\Relationships.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

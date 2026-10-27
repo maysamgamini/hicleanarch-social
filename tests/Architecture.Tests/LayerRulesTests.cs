@@ -12,12 +12,13 @@ public class LayerRulesTests
     public static TheoryData<string> Assemblies() => [.. All.Select(a => a.GetName().Name!)];
 
     [Fact]
-    public void The_host_the_building_blocks_and_every_layer_of_accounts_are_checked() =>
+    public void The_host_the_building_blocks_and_every_layer_of_every_module_are_checked() =>
         Assert.Superset(
             new HashSet<string>
             {
                 "Social.Host", "Social.BuildingBlocks.Domain", "Social.BuildingBlocks.Application", "Social.BuildingBlocks.Infrastructure",
                 "Accounts.Domain", "Accounts.Application", "Accounts.Infrastructure", "Accounts.Contracts",
+                "Relationships.Domain", "Relationships.Application", "Relationships.Infrastructure", "Relationships.Contracts",
             },
             All.Select(a => a.GetName().Name!).ToHashSet());
 

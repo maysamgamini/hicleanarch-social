@@ -2,6 +2,8 @@ using System.Text.Json;
 
 using Accounts.Infrastructure;
 
+using Relationships.Infrastructure;
+
 using Social.BuildingBlocks.Application;
 using Social.BuildingBlocks.Infrastructure.Hosting;
 using Social.BuildingBlocks.Infrastructure.Identity;
@@ -47,6 +49,7 @@ builder.Services.AddHealth(builder.Configuration);
 
 // Each module brings its own services and endpoints. The host only composes them.
 builder.Services.AddAccountsModule(builder.Configuration);
+builder.Services.AddRelationshipsModule(builder.Configuration);
 
 var app = builder.Build();
 
@@ -68,6 +71,7 @@ app.UseAuthorization();
 
 app.MapHealth();
 app.MapAccountsEndpoints();
+app.MapRelationshipsEndpoints();
 
 await app.RunAsync();
 
