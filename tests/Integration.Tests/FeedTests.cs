@@ -158,6 +158,9 @@ public sealed class FeedTests(Postgres postgres) : IntegrationTest(postgres)
         await Write(people, ada, 3);
 
         await Feed(people.As(reader));
+        // Every fanout and follow backfill has landed, so nothing writes to the timeline after it is emptied.
+        await Eventually(async () => await Db.Scalar<bool>(
+            "SELECT NOT EXISTS (SELECT 1 FROM posts.outbox WHERE delivered_at IS NULL) AND NOT EXISTS (SELECT 1 FROM relationships.outbox WHERE delivered_at IS NULL)"));
         await timelines.Db.SortedSetRemoveRangeByScoreAsync(Timelines.Key(reader), 1, double.PositiveInfinity);
         var second = await Feed(people.As(reader));
 

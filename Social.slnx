@@ -15,6 +15,9 @@
     <Project Path="src/Modules/Accounts/Accounts.Domain/Accounts.Domain.csproj" />
     <Project Path="src/Modules/Accounts/Accounts.Infrastructure/Accounts.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/src/Modules/Notifications/">
+    <Project Path="src/Modules/Notifications/Notifications.csproj" />
+  </Folder>
   <Folder Name="/src/Modules/Posts/">
     <Project Path="src/Modules/Posts/Posts.Application/Posts.Application.csproj" />
     <Project Path="src/Modules/Posts/Posts.Contracts/Posts.Contracts.csproj" />

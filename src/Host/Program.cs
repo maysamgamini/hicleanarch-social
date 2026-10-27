@@ -2,6 +2,8 @@ using System.Text.Json;
 
 using Accounts.Infrastructure;
 
+using Notifications;
+
 using Posts.Infrastructure;
 
 using Recommendations.Infrastructure;
@@ -62,6 +64,7 @@ builder.Services.AddRelationshipsModule(builder.Configuration);
 builder.Services.AddPostsModule(builder.Configuration);
 builder.Services.AddTimelineModule(builder.Configuration);
 builder.Services.AddRecommendationsModule(builder.Configuration);
+builder.Services.AddNotificationsModule(builder.Configuration);
 
 var app = builder.Build();
 
@@ -87,6 +90,7 @@ app.MapRelationshipsEndpoints();
 app.MapPostsEndpoints();
 app.MapTimelineEndpoints();
 app.MapRecommendationsEndpoints();
+app.MapNotificationsEndpoints();
 
 await app.RunAsync();
 

@@ -14,6 +14,7 @@ locals {
     posts           = "posts_app"
     timeline        = "timeline_app"
     recommendations = "recommendations_app"
+    notifications   = "notifications_app"
   }
 
   # TLS with the server's certificate checked against the RDS CA bundle, which the image carries.

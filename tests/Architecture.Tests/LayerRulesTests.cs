@@ -22,6 +22,7 @@ public class LayerRulesTests
                 "Posts.Domain", "Posts.Application", "Posts.Infrastructure", "Posts.Contracts",
                 "Timeline.Domain", "Timeline.Application", "Timeline.Infrastructure", "Timeline.Contracts",
                 "Recommendations.Domain", "Recommendations.Application", "Recommendations.Infrastructure", "Recommendations.Contracts",
+                "Notifications",
             },
             All.Select(a => a.GetName().Name!).ToHashSet());
 
@@ -82,6 +83,15 @@ public class LayerRulesTests
             ModuleOf(r) == module || ModuleOf(r) == "BuildingBlocks" || LayerOf(r) == "Contracts",
             $"{name} references {r}"));
     }
+
+    /// <summary>
+    /// Notifications is one project on purpose: it has no rules of its own to protect with layers. It
+    /// may still see other modules only through their contracts.
+    /// </summary>
+    [Fact]
+    public void Notifications_is_one_project_that_sees_others_only_through_contracts() =>
+        Assert.All(ReferencesOf("Notifications"), r => Assert.True(
+            ModuleOf(r) == "BuildingBlocks" || LayerOf(r) == "Contracts", $"Notifications references {r}"));
 
     [Theory]
     [MemberData(nameof(Assemblies))]

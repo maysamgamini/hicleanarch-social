@@ -112,7 +112,7 @@ public sealed class TestDatabase(string owner, string valkey, string graph)
     public string Graph { get; } = graph;
 
     /// <summary>Every module with a schema, as its connection string name and its role's name prefix.</summary>
-    public static readonly string[] Modules = ["Accounts", "Relationships", "Posts", "Timeline", "Recommendations"];
+    public static readonly string[] Modules = ["Accounts", "Relationships", "Posts", "Timeline", "Recommendations", "Notifications"];
 
     public string Owner { get; } = owner;
 
