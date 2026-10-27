@@ -85,6 +85,36 @@ internal sealed class Neo4jGraph(IDriver driver) : IGraphProjection, IGraphReads
         return deleted;
     }
 
+    public async Task<IReadOnlyList<Suggestion>> FriendsOfFriends(Guid reader, TraversalLimits limits, CancellationToken cancellationToken) =>
+        [.. (await Read("FriendsOfFriends", new
+        {
+            me = Id(reader), supernode = limits.SupernodeFollowers, maxFollowing = limits.MaxIntermediateFollowing,
+            intermediates = limits.Intermediates, results = limits.Results,
+        })).Select(r => new Suggestion(Guid.Parse(r["id"].As<string>()), r["handle"].As<string>(), r["mutual"].As<long>()))];
+
+    public async Task<IReadOnlyList<Suggestion>> FollowersNotFollowedBack(Guid reader, int limit, TraversalLimits limits, CancellationToken cancellationToken) =>
+        [.. (await Read("FollowersNotFollowedBack", new { me = Id(reader), limit }))
+            .Select(r => new Suggestion(Guid.Parse(r["id"].As<string>()), r["handle"].As<string>(), 0))];
+
+    public async Task<IReadOnlySet<Guid>> HiddenNow(Guid reader, IReadOnlyList<Guid> accounts, CancellationToken cancellationToken) =>
+        (await Read("HiddenNow", new { me = Id(reader), ids = accounts.Select(Id).ToList() })).Select(r => Guid.Parse(r["id"].As<string>())).ToHashSet();
+
+    public async Task<bool> Dismiss(Guid reader, Guid account, DateTimeOffset until, CancellationToken cancellationToken) =>
+        (await Write("Dismiss", new { me = Id(reader), account = Id(account), until = until.ToUnixTimeMilliseconds() })).Count == 1;
+
+    public async Task<long> CompactDismissals(DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        long deleted = 0, batch;
+        do
+        {
+            batch = (await Write("CompactDismissals", new { now = now.ToUnixTimeMilliseconds() }))[0]["deleted"].As<long>();
+            deleted += batch;
+        }
+        while (batch == 10_000);
+
+        return deleted;
+    }
+
     private async Task<List<IRecord>> Read(string query, object parameters)
     {
         await using var session = driver.AsyncSession();

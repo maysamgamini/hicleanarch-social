@@ -176,4 +176,56 @@ public abstract class SuggestionContract : IAsyncLifetime
         await Projection.UpsertAccount(unknown, "late", Ct);
         await Follow(me, unknown); // the retry, once the account is there
     }
+
+    [Fact]
+    public async Task Only_mutual_follows_count_as_friends()
+    {
+        var (me, friend, followedOnly, viaFriend, viaFollowedOnly) = (await Account(), await Account(), await Account(), await Account(), await Account());
+        await Follow(me, friend);
+        await Follow(friend, me);
+        await Follow(me, followedOnly); // not followed back: not a friend
+        foreach (var (a, b) in new[] { (friend, viaFriend), (viaFriend, friend), (followedOnly, viaFollowedOnly), (viaFollowedOnly, followedOnly) })
+        {
+            await Follow(a, b);
+        }
+
+        var friendsOfFriends = await Reads.FriendsOfFriends(me, Limits, Ct);
+
+        Assert.Equal([viaFriend], friendsOfFriends.Select(s => s.AccountId));
+    }
+
+    [Fact]
+    public async Task People_you_may_know_puts_followers_not_followed_back_first_newest_first()
+    {
+        var (me, friend, fof) = (await Account(), await Account(), await Account());
+        await Follow(me, friend);
+        await Follow(friend, me);
+        await Follow(friend, fof);
+        await Follow(fof, friend);
+        var (olderFan, newerFan, followedBack) = (await Account(), await Account(), await Account());
+        await Follow(olderFan, me);
+        await Follow(newerFan, me);
+        await Follow(followedBack, me);
+        await Follow(me, followedBack);
+
+        var ranked = SuggestionRanking.PeopleYouMayKnow(
+            await Reads.FollowersNotFollowedBack(me, 200, Limits, Ct), await Reads.FriendsOfFriends(me, Limits, Ct), Limits.Results);
+
+        Assert.Equal([newerFan, olderFan, fof], ranked.Select(s => s.AccountId));
+    }
+
+    [Fact]
+    public async Task The_serve_time_filter_names_blocked_both_ways_muted_and_dismissed_accounts()
+    {
+        var me = await Account();
+        var (blocked, blocking, muted, dismissed, fine) = (await Account(), await Account(), await Account(), await Account(), await Account());
+        await Edge(EdgeKind.Blocks, me, blocked);
+        await Edge(EdgeKind.Blocks, blocking, me);
+        await Edge(EdgeKind.Mutes, me, muted);
+        await Projection.Dismiss(me, dismissed, DateTimeOffset.UtcNow.AddDays(90), Ct);
+
+        var hidden = await Reads.HiddenNow(me, [blocked, blocking, muted, dismissed, fine], Ct);
+
+        Assert.Equal(new[] { blocked, blocking, muted, dismissed }.Order(), hidden.Order());
+    }
 }

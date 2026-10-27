@@ -23,6 +23,7 @@ using Social.BuildingBlocks.Infrastructure;
 using Social.BuildingBlocks.Infrastructure.Events;
 using Social.BuildingBlocks.Infrastructure.Identity;
 using Social.BuildingBlocks.Infrastructure.Persistence;
+using Social.BuildingBlocks.Infrastructure.Valkey;
 
 namespace Recommendations.Infrastructure;
 
@@ -60,13 +61,21 @@ public static class RecommendationsModule
         services.AddEventHandler<AccountUnmuted, GraphProjectionHandlers>(ModuleName.Value);
 
         services.AddHostedService<GraphMaintenance>();
+        if (!configuration.HasValkey())
+        {
+            throw new InvalidOperationException("ConnectionStrings:Valkey is not set: suggestions are cached there.");
+        }
+
+        services.AddSharedValkey(configuration);
         return services
             .AddRecommendationsApplication()
             .AddSingleton<Neo4jGraph>()
             .AddSingleton<IGraphProjection>(sp => sp.GetRequiredService<Neo4jGraph>())
             .AddSingleton<IGraphReads>(sp => sp.GetRequiredService<Neo4jGraph>())
             .AddSingleton<IGraphMaintenance>(sp => sp.GetRequiredService<Neo4jGraph>())
-            .AddScoped<IRelationshipSource, InProcessRelationshipSource>();
+            .AddScoped<IRelationshipSource, InProcessRelationshipSource>()
+            .AddScoped<IDismissals, SqlDismissals>()
+            .AddSingleton<ISuggestionCache, ValkeySuggestionCache>();
     }
 
     private static IAuthToken GraphAuth(IConfiguration configuration) =>
@@ -82,13 +91,24 @@ public static class RecommendationsModule
         var suggestions = app.MapGroup("/v1/suggestions").WithTags("Recommendations");
 
         suggestions.MapGet("/who-to-follow", async (ClaimsPrincipal user, IDispatcher dispatcher, CancellationToken ct) =>
+            Reply(await dispatcher.Query<WhoToFollow, IReadOnlyList<Suggestion>>(new WhoToFollow(user.UserId()), ct)));
+
+        suggestions.MapGet("/people-you-may-know", async (ClaimsPrincipal user, IDispatcher dispatcher, CancellationToken ct) =>
+            Reply(await dispatcher.Query<PeopleYouMayKnow, IReadOnlyList<Suggestion>>(new PeopleYouMayKnow(user.UserId()), ct)));
+
+        suggestions.MapPost("/{accountId:guid}/dismiss", async (Guid accountId, ClaimsPrincipal user, IDispatcher dispatcher, CancellationToken ct) =>
         {
-            var result = await dispatcher.Query<WhoToFollow, IReadOnlyList<Suggestion>>(new WhoToFollow(user.UserId()), ct);
-            return result.IsSuccess ? Results.Ok(new SuggestionsReply(result.Value)) : result.Errors.ToProblem();
+            var result = await dispatcher.Send<Dismiss, DateTimeOffset>(new Dismiss(user.UserId(), accountId), ct);
+            return result.IsSuccess ? Results.Ok(new DismissReply(accountId, result.Value)) : result.Errors.ToProblem();
         });
 
         return app;
     }
+
+    private static IResult Reply(Social.BuildingBlocks.Domain.Result<IReadOnlyList<Suggestion>> result) =>
+        result.IsSuccess ? Results.Ok(new SuggestionsReply(result.Value)) : result.Errors.ToProblem();
 }
 
 internal sealed record SuggestionsReply(IReadOnlyList<Suggestion> Items);
+
+internal sealed record DismissReply(Guid AccountId, DateTimeOffset DismissedUntil);

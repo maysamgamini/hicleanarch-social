@@ -30,6 +30,19 @@ public sealed record TraversalLimits(int SupernodeFollowers, int MaxIntermediate
 /// <summary>A suggested account and how many of the reader's intermediates lead to it.</summary>
 public sealed record Suggestion(Guid AccountId, string Handle, long Mutual);
 
+/// <summary>The two suggestion lists, by the name their cache entries and endpoints use.</summary>
+public static class SuggestionKind
+{
+    public const string WhoToFollow = "who-to-follow";
+    public const string PeopleYouMayKnow = "people-you-may-know";
+}
+
+/// <summary>A dismissal hides an account from the reader's suggestions for 90 days.</summary>
+public static class Dismissal
+{
+    public static readonly TimeSpan Lasts = TimeSpan.FromDays(90);
+}
+
 public static class SuggestionRanking
 {
     /// <summary>Most mutual connections first; ties by account id in PostgreSQL's uuid order (its bytes, as written).</summary>
@@ -38,4 +51,17 @@ public static class SuggestionRanking
             .OrderByDescending(s => s.Mutual)
             .ThenBy(s => s.AccountId.ToString("N"), StringComparer.Ordinal)
             .Take(limit)];
+
+    /// <summary>
+    /// People you may know: accounts that follow the reader and are not followed back come first,
+    /// newest follow first; then friends of friends by mutual friends, ties by id. An account in both
+    /// lists appears once, in the first, with its mutual count.
+    /// </summary>
+    public static IReadOnlyList<Suggestion> PeopleYouMayKnow(IReadOnlyList<Suggestion> followersNotFollowedBack, IEnumerable<Suggestion> friendsOfFriends, int limit)
+    {
+        var mutual = friendsOfFriends.ToDictionary(s => s.AccountId);
+        var first = followersNotFollowedBack.Select(f => mutual.TryGetValue(f.AccountId, out var m) ? f with { Mutual = m.Mutual } : f).ToList();
+        var shown = first.Select(f => f.AccountId).ToHashSet();
+        return [.. first.Concat(Rank(mutual.Values.Where(m => !shown.Contains(m.AccountId)), limit)).Take(limit)];
+    }
 }

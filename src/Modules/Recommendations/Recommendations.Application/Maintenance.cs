@@ -9,7 +9,9 @@ namespace Recommendations.Application;
 /// The nightly reconciliation: each account's degrees in the graph against Relationships' counts.
 /// An account that differs has every one of its pairs re-projected from the source (a versioned
 /// apply, so it changes only what is behind) and its degrees recounted from its edges. Duplicate
-/// Account nodes are reported. The graph is a projection: it is repaired, never trusted.
+/// Account nodes are reported. The dismissals in force for every account of the page are projected
+/// again from recommendations.dismissals, their durable record (a MERGE, so a present edge is
+/// unchanged). The graph is a projection: it is repaired, never trusted.
 /// </summary>
 public sealed record Reconcile : ICommand<ReconciliationReport>;
 
@@ -21,7 +23,7 @@ public sealed record Compact : ICommand<long>
     public static readonly TimeSpan Keep = TimeSpan.FromDays(30);
 }
 
-public sealed class MaintenanceHandlers(IGraphMaintenance graph, IGraphProjection projection, IRelationshipSource source, TimeProvider clock) :
+public sealed class MaintenanceHandlers(IGraphMaintenance graph, IGraphProjection projection, IRelationshipSource source, IDismissals dismissals, TimeProvider clock) :
     ICommandHandler<Reconcile, ReconciliationReport>, ICommandHandler<Compact, long>
 {
     public const int Batch = 1_000;
@@ -39,6 +41,11 @@ public sealed class MaintenanceHandlers(IGraphMaintenance graph, IGraphProjectio
             }
 
             var truth = await source.Counts([.. page.Select(a => a.AccountId)], cancellationToken);
+            foreach (var (reader, account, until) in await dismissals.InForce([.. page.Select(a => a.AccountId)], clock.GetUtcNow(), cancellationToken))
+            {
+                await projection.Dismiss(reader, account, until, cancellationToken);
+            }
+
             foreach (var account in page)
             {
                 checkedCount++;
@@ -61,6 +68,13 @@ public sealed class MaintenanceHandlers(IGraphMaintenance graph, IGraphProjectio
         return Result.Success(new ReconciliationReport(checkedCount, repaired, await graph.DuplicateAccounts(cancellationToken)));
     }
 
-    public async Task<Result<long>> Handle(Compact command, CancellationToken cancellationToken) =>
-        Result.Success(await graph.CompactOffEdges(clock.GetUtcNow() - Compact.Keep, cancellationToken));
+    /// <summary>Off edges older than 30 days, and dismissals whose 90 days are over, in the graph and in PostgreSQL.</summary>
+    public async Task<Result<long>> Handle(Compact command, CancellationToken cancellationToken)
+    {
+        var now = clock.GetUtcNow();
+        var deleted = await graph.CompactOffEdges(now - Compact.Keep, cancellationToken);
+        deleted += await graph.CompactDismissals(now, cancellationToken);
+        await dismissals.PurgeBefore(now, cancellationToken);
+        return Result.Success(deleted);
+    }
 }

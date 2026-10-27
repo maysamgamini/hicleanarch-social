@@ -30,6 +30,77 @@ public sealed class MaintenanceTests(Neo4jServer neo4j)
                 .Select(f => new EdgeChange(EdgeKind.Follows, f.From, f.To, 1, true, at))]);
     }
 
+    private sealed class NoDismissals : IDismissals
+    {
+        public List<(Guid Reader, Guid Account, DateTimeOffset Until)> Kept { get; } = [];
+
+        public Task Save(Guid reader, Guid account, DateTimeOffset until, CancellationToken cancellationToken)
+        {
+            Kept.Add((reader, account, until));
+            return Task.CompletedTask;
+        }
+
+        public Task<int> PurgeBefore(DateTimeOffset cutoff, CancellationToken cancellationToken) => Task.FromResult(0);
+
+        public Task<IReadOnlyList<(Guid Reader, Guid Account, DateTimeOffset Until)>> InForce(IReadOnlyList<Guid> readers, DateTimeOffset now, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<(Guid, Guid, DateTimeOffset)>>([.. Kept.Where(k => readers.Contains(k.Reader) && k.Until > now)]);
+    }
+
+    [Fact]
+    public async Task A_dismissal_missing_from_the_graph_is_projected_again_from_its_durable_record()
+    {
+        var (me, a, candidate) = (await Account(), await Account(), await Account());
+        await _graph.Apply(new EdgeChange(EdgeKind.Follows, me, a, 1, true, DateTimeOffset.UtcNow), Ct);
+        await _graph.Apply(new EdgeChange(EdgeKind.Follows, a, candidate, 1, true, DateTimeOffset.UtcNow), Ct);
+        // The row exists in PostgreSQL; the edge never reached the graph (or the graph was rebuilt).
+        var dismissals = new NoDismissals();
+        await dismissals.Save(me, candidate, DateTimeOffset.UtcNow.AddDays(30), Ct);
+        Assert.Single(await _graph.WhoToFollow(me, TraversalLimits.Default, Ct));
+
+        await new MaintenanceHandlers(_graph, _graph, new Truth([(me, a), (a, candidate)]), dismissals, TimeProvider.System).Handle(new Reconcile(), Ct);
+
+        Assert.Empty(await _graph.WhoToFollow(me, TraversalLimits.Default, Ct));
+    }
+
+    /// <summary>A clock the test moves.</summary>
+    private sealed class Clock(DateTimeOffset now) : TimeProvider
+    {
+        public DateTimeOffset Now { get; set; } = now;
+
+        public override DateTimeOffset GetUtcNow() => Now;
+    }
+
+    [Fact]
+    public async Task A_dismissed_account_is_not_suggested_again_for_90_days()
+    {
+        var (me, a, candidate) = (await Account(), await Account(), await Account());
+        await _graph.Apply(new EdgeChange(EdgeKind.Follows, me, a, 1, true, DateTimeOffset.UtcNow), Ct);
+        await _graph.Apply(new EdgeChange(EdgeKind.Follows, a, candidate, 1, true, DateTimeOffset.UtcNow), Ct);
+        var clock = new Clock(DateTimeOffset.UtcNow);
+        var dismiss = new DismissHandler(new NoDismissals(), _graph, new NoCache(), clock);
+        var compact = new MaintenanceHandlers(_graph, _graph, new Truth([]), new NoDismissals(), clock);
+
+        await dismiss.Handle(new Dismiss(me, candidate), Ct);
+        Assert.Empty(await _graph.WhoToFollow(me, TraversalLimits.Default, Ct));
+
+        clock.Now += TimeSpan.FromDays(89);
+        await compact.Handle(new Compact(), Ct);
+        Assert.Empty(await _graph.WhoToFollow(me, TraversalLimits.Default, Ct));
+
+        clock.Now += TimeSpan.FromDays(2);
+        await compact.Handle(new Compact(), Ct);
+        Assert.Equal([candidate], (await _graph.WhoToFollow(me, TraversalLimits.Default, Ct)).Select(s => s.AccountId));
+    }
+
+    private sealed class NoCache : ISuggestionCache
+    {
+        public Task<IReadOnlyList<Suggestion>?> Get(Guid reader, string kind, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<Suggestion>?>(null);
+
+        public Task Set(Guid reader, string kind, IReadOnlyList<Suggestion> suggestions, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task Drop(Guid reader, CancellationToken cancellationToken) => Task.CompletedTask;
+    }
+
     private async Task<Guid> Account()
     {
         var id = Guid.CreateVersion7();
@@ -55,7 +126,7 @@ public sealed class MaintenanceTests(Neo4jServer neo4j)
             await session.ExecuteWriteAsync(tx => tx.RunAsync("MATCH (x:Account {id: $id}) SET x.followers = 41", new { id = b.ToString("D") }));
         }
 
-        var handlers = new MaintenanceHandlers(_graph, _graph, new Truth([(a, b)]), TimeProvider.System);
+        var handlers = new MaintenanceHandlers(_graph, _graph, new Truth([(a, b)]), new NoDismissals(), TimeProvider.System);
         var report = (await handlers.Handle(new Reconcile(), Ct)).Value;
 
         Assert.Equal(1L, await Property(b, "followers"));
@@ -68,7 +139,7 @@ public sealed class MaintenanceTests(Neo4jServer neo4j)
     {
         var (a, b) = (await Account(), await Account());
 
-        var handlers = new MaintenanceHandlers(_graph, _graph, new Truth([(a, b)]), TimeProvider.System);
+        var handlers = new MaintenanceHandlers(_graph, _graph, new Truth([(a, b)]), new NoDismissals(), TimeProvider.System);
         await handlers.Handle(new Reconcile(), Ct);
 
         Assert.Equal(1L, await Property(a, "following"));
@@ -84,7 +155,7 @@ public sealed class MaintenanceTests(Neo4jServer neo4j)
         await _graph.Apply(new EdgeChange(EdgeKind.Follows, a, young, 2, false, now.AddDays(-10)), Ct);
         await _graph.Apply(new EdgeChange(EdgeKind.Follows, a, on, 2, true, now.AddDays(-400)), Ct);
 
-        var handlers = new MaintenanceHandlers(_graph, _graph, new Truth([]), TimeProvider.System);
+        var handlers = new MaintenanceHandlers(_graph, _graph, new Truth([]), new NoDismissals(), TimeProvider.System);
         await handlers.Handle(new Compact(), Ct);
 
         await using var session = neo4j.Driver.AsyncSession();

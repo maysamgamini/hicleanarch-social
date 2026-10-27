@@ -67,6 +67,7 @@ WHERE c.id <> $me
   AND NOT (me)-[:BLOCKS {on: true}]->(c)
   AND NOT (c)-[:BLOCKS {on: true}]->(me)
   AND NOT (me)-[:MUTES {on: true}]->(c)
+  AND NOT (me)-[:DISMISSED]->(c)
 RETURN c.id AS id, c.handle AS handle, count(*) AS mutual
 ORDER BY mutual DESC, id
 LIMIT $results
@@ -119,4 +120,60 @@ MATCH (:Account)-[r:MUTES {on: false}]->(:Account)
 WHERE r.since < $cutoff
 WITH r LIMIT 10000
 DELETE r
+RETURN count(*) AS deleted
+
+// name: FriendsOfFriends
+// People you may know: friends are mutual follows. The reader's newest friends (no supernode, capped
+// following), then their friends, counted by how many friends they share with the reader.
+MATCH (me:Account {id: $me})-[f1:FOLLOWS {on: true}]->(f:Account)-[:FOLLOWS {on: true}]->(me)
+WHERE f.followers < $supernode AND f.following <= $maxFollowing
+WITH me, f, f1 ORDER BY f1.since DESC LIMIT $intermediates
+MATCH (f)-[:FOLLOWS {on: true}]->(c:Account {active: true})-[:FOLLOWS {on: true}]->(f)
+WHERE c.id <> $me
+  AND NOT (me)-[:FOLLOWS {on: true}]->(c)
+  AND NOT (me)-[:BLOCKS {on: true}]->(c)
+  AND NOT (c)-[:BLOCKS {on: true}]->(me)
+  AND NOT (me)-[:MUTES {on: true}]->(c)
+  AND NOT (me)-[:DISMISSED]->(c)
+RETURN c.id AS id, c.handle AS handle, count(*) AS mutual
+ORDER BY mutual DESC, id
+LIMIT $results
+
+// name: FollowersNotFollowedBack
+// The reader's newest followers that the reader does not follow back: a bounded set however many
+// followers the reader has.
+MATCH (c:Account {active: true})-[r:FOLLOWS {on: true}]->(me:Account {id: $me})
+WHERE NOT (me)-[:FOLLOWS {on: true}]->(c)
+  AND NOT (me)-[:BLOCKS {on: true}]->(c)
+  AND NOT (c)-[:BLOCKS {on: true}]->(me)
+  AND NOT (me)-[:MUTES {on: true}]->(c)
+  AND NOT (me)-[:DISMISSED]->(c)
+RETURN c.id AS id, c.handle AS handle, r.since AS since
+ORDER BY since DESC, id
+LIMIT $limit
+
+// name: HiddenNow
+// The serve-time filter: of a cached list, who the reader may not be shown now.
+MATCH (me:Account {id: $me})
+UNWIND $ids AS id
+MATCH (c:Account {id: id})
+WHERE (me)-[:BLOCKS {on: true}]->(c)
+   OR (c)-[:BLOCKS {on: true}]->(me)
+   OR (me)-[:MUTES {on: true}]->(c)
+   OR (me)-[:DISMISSED]->(c)
+RETURN c.id AS id
+
+// name: Dismiss
+// The projection of a durable dismissal (recommendations.dismissals); until is epoch milliseconds.
+MATCH (me:Account {id: $me}), (c:Account {id: $account})
+MERGE (me)-[d:DISMISSED]->(c)
+SET d.until = $until
+RETURN c.id AS id
+
+// name: CompactDismissals
+// A dismissal whose 90 days are over is deleted by this job, not filtered by date in the walks.
+MATCH (:Account)-[d:DISMISSED]->(:Account)
+WHERE d.until < $now
+WITH d LIMIT 10000
+DELETE d
 RETURN count(*) AS deleted

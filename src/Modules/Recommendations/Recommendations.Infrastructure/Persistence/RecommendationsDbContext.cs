@@ -7,13 +7,32 @@ namespace Recommendations.Infrastructure.Persistence;
 
 /// <summary>
 /// Recommendations' own PostgreSQL schema. It held the first adapter of the graph (s2-l13); the graph
-/// now lives in the graph database, and the schema waits for what must be durable here (s2-l16).
+/// now lives in the graph database, and the schema keeps what is not derived: dismissals.
 /// </summary>
 internal sealed class RecommendationsDbContext(DbContextOptions<RecommendationsDbContext> options) : DbContext(options)
 {
     public const string Schema = "recommendations";
 
-    protected override void OnModelCreating(ModelBuilder modelBuilder) => modelBuilder.HasDefaultSchema(Schema);
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.HasDefaultSchema(Schema);
+        modelBuilder.Entity<DismissalRow>(dismissal =>
+        {
+            dismissal.ToTable("dismissals");
+            dismissal.HasKey(d => new { d.ReaderId, d.AccountId });
+            dismissal.HasIndex(d => d.Until).HasDatabaseName("dismissals_by_until");
+        });
+    }
+}
+
+/// <summary>A reader hid an account from their suggestions until a time: the durable record, projected as a DISMISSED edge.</summary>
+internal sealed class DismissalRow
+{
+    public Guid ReaderId { get; set; }
+
+    public Guid AccountId { get; set; }
+
+    public DateTimeOffset Until { get; set; }
 }
 
 internal static class RecommendationsDbOptions
