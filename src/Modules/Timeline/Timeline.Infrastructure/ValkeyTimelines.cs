@@ -10,7 +10,7 @@ namespace Timeline.Infrastructure;
 /// score = its UUIDv7 milliseconds. One script per timeline, so the existence check, the add and the
 /// trim are one step no other command can come between.
 /// </summary>
-internal sealed class ValkeyTimelines(IConnectionMultiplexer valkey) : ITimelines
+internal sealed class ValkeyTimelines(IConnectionMultiplexer valkey, FanoutPace pace) : ITimelines
 {
     // Add only to a timeline that exists, then keep the newest MaxEntries. A fanout never creates a
     // timeline: one is created by its reader's first read, which fills it from Posts. The sentinel
@@ -50,7 +50,11 @@ internal sealed class ValkeyTimelines(IConnectionMultiplexer valkey) : ITimeline
         var writes = owners
             .Select(owner => batch.ScriptEvaluateAsync(AddIfExists, new { key = Key(owner), score, member = (RedisValue)member, keep = TimelineRules.MaxEntries }))
             .ToList();
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
         batch.Execute();
+        // The first reply is one round trip: how slow Valkey is right now, whatever the page's size.
+        await Task.WhenAny(writes).WaitAsync(cancellationToken);
+        pace.Written(System.Diagnostics.Stopwatch.GetElapsedTime(started));
         var results = await Task.WhenAll(writes).WaitAsync(cancellationToken);
         return results.Count(r => (int)r == 1);
     }

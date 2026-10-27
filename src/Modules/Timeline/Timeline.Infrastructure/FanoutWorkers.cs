@@ -42,6 +42,7 @@ internal sealed partial class FanoutWorkers(IServiceScopeFactory scopes, IConfig
     {
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken, _stopping.Token);
         var ct = linked.Token;
+        FanoutPace.CurrentPool.Value = pool;
         while (!ct.IsCancellationRequested)
         {
             FanoutJob? current = null;

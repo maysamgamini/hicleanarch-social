@@ -159,8 +159,10 @@ public sealed class FeedTests(Postgres postgres) : IntegrationTest(postgres)
 
         await Feed(people.As(reader));
         // Every fanout and follow backfill has landed, so nothing writes to the timeline after it is emptied.
+        // Since s3-l02 a delivered PostPublished is a fanout job, written after it: wait for the jobs too.
         await Eventually(async () => await Db.Scalar<bool>(
-            "SELECT NOT EXISTS (SELECT 1 FROM posts.outbox WHERE delivered_at IS NULL) AND NOT EXISTS (SELECT 1 FROM relationships.outbox WHERE delivered_at IS NULL)"));
+            "SELECT NOT EXISTS (SELECT 1 FROM posts.outbox WHERE delivered_at IS NULL) AND NOT EXISTS (SELECT 1 FROM relationships.outbox WHERE delivered_at IS NULL)"
+            + " AND NOT EXISTS (SELECT 1 FROM timeline.fanout_jobs WHERE status <> 'DONE')"));
         await timelines.Db.SortedSetRemoveRangeByScoreAsync(Timelines.Key(reader), 1, double.PositiveInfinity);
         var second = await Feed(people.As(reader));
 

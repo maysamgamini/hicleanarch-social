@@ -25,7 +25,7 @@ public sealed class Postgres : IAsyncLifetime
 
     // Each test's host keeps a connection pool per module role.
     private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("postgres:17")
-        .WithCommand("-c", "max_connections=1000")
+        .WithCommand("-c", "max_connections=1500")
         .Build();
 
     // Valkey as ElastiCache runs it: a plain container, ready when it says so. Tests share it and
@@ -121,6 +121,8 @@ public sealed class TestDatabase(string owner, string valkey, string graph)
     {
         Username = module.ToLowerInvariant() + "_app",
         Password = module.ToLowerInvariant() + "_test",
+        // Many hosts share the one server: a smaller pool per module keeps the run under its connection limit.
+        MaxPoolSize = 25,
     }.ConnectionString;
 
     /// <summary>Runs SQL as the owner, for what a test sets up or checks behind the API's back.</summary>

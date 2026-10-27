@@ -43,6 +43,9 @@ public static class TimelineModule
         services.AddSingleton<IModuleMigrator, TimelineMigrator>();
         services.AddHostedService<TimelineMonitor>();
         // The fanout's worker loops, in two pools; given back their jobs at a graceful stop.
+        services.AddSingleton<FanoutPace>();
+        services.AddSingleton<IFanoutPace>(sp => sp.GetRequiredService<FanoutPace>());
+        services.AddHostedService(sp => sp.GetRequiredService<FanoutPace>());
         services.AddSingleton<FanoutWorkers>();
         services.AddHostedService(sp => sp.GetRequiredService<FanoutWorkers>());
         services.AddSingleton<IStopParticipant>(sp => sp.GetRequiredService<FanoutWorkers>());

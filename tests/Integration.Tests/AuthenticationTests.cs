@@ -86,7 +86,12 @@ public sealed class HealthTests(Postgres postgres) : IntegrationTest(postgres)
     [Fact]
     public async Task The_ready_check_reaches_every_modules_database()
     {
-        var reply = await StartHost().CreateClient().GetFromJsonAsync<JsonElement>("/health/ready", Ct);
+        var host = StartHost();
+
+        // A dependency slow for a moment on a busy test machine is "not ready" for that moment: the check
+        // is asked again, as a load balancer does, until it answers ready.
+        await Eventually(async () => (await host.CreateClient().GetAsync("/health/ready", Ct)).IsSuccessStatusCode);
+        var reply = await host.CreateClient().GetFromJsonAsync<JsonElement>("/health/ready", Ct);
 
         Assert.Equal("ready", reply.GetProperty("status").GetString());
     }

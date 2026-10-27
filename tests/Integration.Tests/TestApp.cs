@@ -33,7 +33,10 @@ public static class TestApp
                 .UseSetting("Auth:ClientId", ClientId)
                 .UseSetting("Auth:LocalSigningKey", SigningKey)
                 .UseSetting("Timeline:Cursor:Keys:Current", CursorKey)
-                .UseSetting("Timeline:SeenSampleRate", "1");
+                .UseSetting("Timeline:SeenSampleRate", "1")
+                // A shared test machine's Valkey answers in milliseconds, not the 5 ms a cluster keeps to:
+                // only the backpressure test, which slows Valkey on purpose, uses the production line.
+                .UseSetting("Timeline:Fanout:SlowAbove", "00:00:00.050");
             foreach (var module in TestDatabase.Modules)
             {
                 web.UseSetting($"ConnectionStrings:{module}", database.For(module));
@@ -73,7 +76,7 @@ public abstract class IntegrationTest(Postgres postgres) : IAsyncLifetime
 
     public virtual async ValueTask InitializeAsync() => Db = await Server.NewDatabase();
 
-    public async ValueTask DisposeAsync()
+    public virtual async ValueTask DisposeAsync()
     {
         foreach (var host in _hosts)
         {

@@ -66,7 +66,8 @@ public sealed class DurableFanoutTests(Postgres postgres) : IntegrationTest(post
         {
             var runner = new FanoutRunner(scope.ServiceProvider.GetRequiredService<IFanoutJobs>(),
                 new DiesOnThirdWrite(scope.ServiceProvider.GetRequiredService<ITimelines>()),
-                scope.ServiceProvider.GetRequiredService<IFollowerPages>(), scope.ServiceProvider.GetRequiredService<IFanoutProgress>(), TimeProvider.System);
+                scope.ServiceProvider.GetRequiredService<IFollowerPages>(), scope.ServiceProvider.GetRequiredService<IFanoutProgress>(),
+                scope.ServiceProvider.GetRequiredService<IFanoutPace>(), TimeProvider.System);
             await Assert.ThrowsAsync<IOException>(() => runner.RunOne(FanoutPool.Large, TimeSpan.FromSeconds(2), null, Ct));
         }
 

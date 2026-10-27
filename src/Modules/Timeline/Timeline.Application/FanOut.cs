@@ -36,6 +36,12 @@ public interface IFanoutJobs
     Task Release(FanoutJob job, CancellationToken cancellationToken);
 }
 
+/// <summary>A pool's pace: each page waits its turn, so the pool writes no faster than its current rate.</summary>
+public interface IFanoutPace
+{
+    Task WaitTurn(FanoutPool pool, CancellationToken cancellationToken);
+}
+
 /// <summary>How many followers an author has, as the source of truth counts them now.</summary>
 public interface IAudience
 {
@@ -63,7 +69,7 @@ public sealed class StartFanoutHandler(IFanoutJobs jobs, IAudience audience, IFa
 /// the cursor only after Valkey has confirmed the page. A page written again after a crash changes
 /// nothing (the add is idempotent); a page is never skipped.
 /// </summary>
-public sealed class FanoutRunner(IFanoutJobs jobs, ITimelines timelines, IFollowerPages followers, IFanoutProgress progress, TimeProvider clock)
+public sealed class FanoutRunner(IFanoutJobs jobs, ITimelines timelines, IFollowerPages followers, IFanoutProgress progress, IFanoutPace pace, TimeProvider clock)
 {
     public static readonly TimeSpan DefaultLease = TimeSpan.FromSeconds(30);
 
@@ -91,6 +97,7 @@ public sealed class FanoutRunner(IFanoutJobs jobs, ITimelines timelines, IFollow
         while (true)
         {
             var (page, next) = await followers.Page(job.AuthorId, job.Cursor, FanoutPools.PageSize, cancellationToken);
+            await pace.WaitTurn(job.Pool, cancellationToken);
             await timelines.AddToExisting(page, job.PostId, cancellationToken);
             job = job with { Cursor = next ?? (page.Count > 0 ? page[^1] : job.Cursor), Reached = job.Reached + page.Count };
             holding?.Invoke(job);

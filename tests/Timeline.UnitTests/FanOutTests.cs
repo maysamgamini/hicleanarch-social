@@ -71,6 +71,11 @@ public class FanOutTests
         public void Expire() => Holder = Guid.Empty;
     }
 
+    private sealed class NoPace : IFanoutPace
+    {
+        public Task WaitTurn(FanoutPool pool, CancellationToken cancellationToken) => Task.CompletedTask;
+    }
+
     private sealed class Progress : IFanoutProgress
     {
         public bool Completed { get; private set; }
@@ -121,7 +126,7 @@ public class FanOutTests
         var jobs = new OneJob(post, author);
         var progress = new Progress();
 
-        await new FanoutRunner(jobs, timelines, audience, progress, TimeProvider.System).RunOne(FanoutPool.Large, TimeSpan.FromSeconds(30), null, Ct);
+        await new FanoutRunner(jobs, timelines, audience, progress, new NoPace(), TimeProvider.System).RunOne(FanoutPool.Large, TimeSpan.FromSeconds(30), null, Ct);
 
         Assert.Equal([1_000, 1_000, 500], audience.PageSizes);
         Assert.Equal(author, timelines.Written[0]);
@@ -137,13 +142,13 @@ public class FanOutTests
         var jobs = new OneJob(post, author);
         var dying = new Dying(failOnCall: 3); // author, page 1, then dies writing page 2
 
-        await Assert.ThrowsAsync<IOException>(() => new FanoutRunner(jobs, dying, audience, new Progress(), TimeProvider.System)
+        await Assert.ThrowsAsync<IOException>(() => new FanoutRunner(jobs, dying, audience, new Progress(), new NoPace(), TimeProvider.System)
             .RunOne(FanoutPool.Large, TimeSpan.FromSeconds(30), null, Ct));
         Assert.Equal(1_000, jobs.Stored!.Reached);
 
         jobs.Expire();
         var next = new InMemoryTimelines();
-        await new FanoutRunner(jobs, next, audience, new Progress(), TimeProvider.System).RunOne(FanoutPool.Large, TimeSpan.FromSeconds(30), null, Ct);
+        await new FanoutRunner(jobs, next, audience, new Progress(), new NoPace(), TimeProvider.System).RunOne(FanoutPool.Large, TimeSpan.FromSeconds(30), null, Ct);
 
         Assert.True(jobs.Done);
         Assert.Equal(audience.All.Skip(1_000), next.Written);
