@@ -5,7 +5,6 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 
 using Social.BuildingBlocks.Application;
 
@@ -193,8 +192,9 @@ public sealed class HybridFanoutTests(Postgres postgres) : IntegrationTest(postg
         var slow = new System.Collections.Concurrent.ConcurrentDictionary<Guid, bool>();
         var people = new People(Start(services =>
         {
-            var real = services.Single(d => d.ServiceType == typeof(IRecentPosts));
-            services.Replace(ServiceDescriptor.Singleton<IRecentPosts>(sp => new Slow((IRecentPosts)ActivatorUtilities.CreateInstance(sp, real.ImplementationType!), slow)));
+            var real = services.Single(d => d.ServiceType == typeof(IRecentPosts) && d.IsKeyedService);
+            services.Remove(real);
+            services.AddKeyedSingleton<IRecentPosts>(real.ServiceKey, (sp, _) => new Slow((IRecentPosts)ActivatorUtilities.CreateInstance(sp, real.KeyedImplementationType!), slow));
         }, realBudget: true));
         var (star, friend, fan) = (await people.SignUp(), await people.SignUp(), await people.SignUp());
         slow[star] = true;

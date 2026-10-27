@@ -79,7 +79,9 @@ public static class TimelineModule
             .AddSingleton<ValkeyPulls>()
             .AddSingleton<IPullRegistry>(sp => sp.GetRequiredService<ValkeyPulls>())
             .AddSingleton<IPullLists>(sp => sp.GetRequiredService<ValkeyPulls>())
-            .AddSingleton<IRecentPosts, InProcessRecentPosts>()
+            // Posts' answer, behind the per-task single-flight and micro-cache.
+            .AddKeyedSingleton<IRecentPosts, InProcessRecentPosts>(CoalescedRecentPosts.Source)
+            .AddSingleton<IRecentPosts>(sp => new CoalescedRecentPosts(sp.GetRequiredKeyedService<IRecentPosts>(CoalescedRecentPosts.Source), sp.GetRequiredService<TimeProvider>()))
             .AddSingleton<ISeenPosts, SampledSeenPosts>();
     }
 

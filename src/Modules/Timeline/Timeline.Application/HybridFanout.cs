@@ -68,13 +68,16 @@ public sealed record PullOptions(TimeSpan Budget);
 
 /// <summary>
 /// The pull side of a feed read: the reader's pull list (cached 10 minutes), then each pulled author's
-/// newest posts after the page's cursor, all at once, each within its budget. A late author is skipped
-/// for this page; the page is still served.
+/// newest posts after the page's cursor, all at once, each within its budget. A late author, or one
+/// whose read failed, is skipped for this page; the page is still served.
 /// </summary>
 public sealed class PulledReads(IPullRegistry registry, IPullLists lists, IRecentPosts recent, IProfiles profiles, PullOptions options, TimeProvider clock)
 {
     private static readonly Counter<long> Skipped = new Meter("Social.Timeline").CreateCounter<long>(
         "social.feed.pulls_skipped", "{author}", "Pulled authors left out of a page for answering after their budget");
+
+    private static readonly Counter<long> Failed = new Meter("Social.Timeline").CreateCounter<long>(
+        "social.feed.pulls_failed", "{author}", "Pulled authors left out of a page because their read failed");
 
     public async Task<IReadOnlyList<Guid>> PullListOf(Guid reader, IReadOnlySet<Guid> followed, CancellationToken cancellationToken)
     {
@@ -114,7 +117,13 @@ public sealed class PulledReads(IPullRegistry registry, IPullLists lists, IRecen
         var call = recent.Of(author, before, want, late.Token);
         if (await Task.WhenAny(call, Task.Delay(options.Budget, cancellationToken)) == call)
         {
-            return await call;
+            if (call.IsCompletedSuccessfully)
+            {
+                return call.Result;
+            }
+
+            Failed.Add(1); // a pulled author Posts could not answer for is left out, like a late one
+            return null;
         }
 
         late.Cancel();
