@@ -93,4 +93,12 @@ internal sealed class ValkeyTimelines(IConnectionMultiplexer valkey) : ITimeline
 
     public Task Touch(Guid owner, CancellationToken cancellationToken) =>
         valkey.GetDatabase().KeyExpireAsync(Key(owner), TimelineRules.Expiry).WaitAsync(cancellationToken);
+
+    public async Task Remove(Guid owner, IReadOnlyList<Guid> postIds, CancellationToken cancellationToken)
+    {
+        if (postIds.Count > 0)
+        {
+            await valkey.GetDatabase().SortedSetRemoveAsync(Key(owner), [.. postIds.Select(p => (RedisValue)TimelineRules.Member(p))]).WaitAsync(cancellationToken);
+        }
+    }
 }

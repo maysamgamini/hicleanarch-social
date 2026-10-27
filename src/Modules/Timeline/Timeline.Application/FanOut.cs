@@ -43,5 +43,7 @@ public static class TimelineApplication
     public static IServiceCollection AddTimelineApplication(this IServiceCollection services) =>
         services
             .AddScoped<ICommandHandler<FanOut, FanOutResult>, FanOutHandler>()
-            .AddScoped<IQueryHandler<ReadFeed, FeedPage>, ReadFeedHandler>();
+            .AddScoped<IQueryHandler<ReadFeed, FeedPage>, ReadFeedHandler>()
+            .AddScoped<ICommandHandler<RemoveAuthor, int>, RemoveAuthorHandler>()
+            .AddScoped<ICommandHandler<AddRecentPosts, int>, AddRecentPostsHandler>();
 }

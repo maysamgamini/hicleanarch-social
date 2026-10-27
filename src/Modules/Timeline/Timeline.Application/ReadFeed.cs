@@ -22,8 +22,12 @@ public sealed record FeedPage(IReadOnlyList<FeedItem> Items, string? NextCursor)
 /// A later page starts at the cursor's score, inclusive, and drops the entries of that same score at
 /// or above the cursor's post id: posts arriving at the top move no boundary, and two posts in the
 /// same millisecond are each shown once.
+/// The read filter decides what a page may show, whatever the timeline still holds: a post whose
+/// author is hidden from the reader (a block either way, or the reader's mute), is not active, or is
+/// no longer followed by the reader is dropped; the reader's own posts are always kept.
 /// </summary>
-public sealed class ReadFeedHandler(ITimelines timelines, IPostSummaries posts, IProfiles profiles, IFollowing following, FeedCursors cursors)
+public sealed class ReadFeedHandler(
+    ITimelines timelines, IPostSummaries posts, IProfiles profiles, IFollowing following, IHiddenAuthors hidden, FeedCursors cursors)
     : IQueryHandler<ReadFeed, FeedPage>
 {
     public const int DefaultLimit = 20;
@@ -52,10 +56,13 @@ public sealed class ReadFeedHandler(ITimelines timelines, IPostSummaries posts, 
             after = position.Value;
         }
 
+        var followed = (await following.Of(reader, cancellationToken)).ToHashSet();
         if (!await timelines.Exists(reader, cancellationToken))
         {
-            await Build(reader, cancellationToken);
+            await Build(reader, followed, cancellationToken);
         }
+
+        var filter = new ReadFilter(reader, followed, (await hidden.Of(reader, cancellationToken)).ToHashSet());
 
         var items = new List<FeedItem>();
         var read = 0;
@@ -66,7 +73,7 @@ public sealed class ReadFeedHandler(ITimelines timelines, IPostSummaries posts, 
             var entries = await timelines.Read(reader, after?.Score, read, want, cancellationToken);
             read += entries.Count;
             exhausted = entries.Count < want;
-            items.AddRange(await Hydrate([.. entries.Where(e => After(e, after))], cancellationToken));
+            items.AddRange((await Hydrate([.. entries.Where(e => After(e, after))], cancellationToken)).Where(filter.Shows));
         }
 
         // Only a read keeps a timeline alive; a fanout never does.
@@ -82,14 +89,14 @@ public sealed class ReadFeedHandler(ITimelines timelines, IPostSummaries posts, 
         cursor is null || entry.Score < cursor.Score
         || string.CompareOrdinal(TimelineRules.Member(entry.PostId), TimelineRules.Member(cursor.PostId)) < 0;
 
-    private async Task Build(Guid reader, CancellationToken cancellationToken)
+    private async Task Build(Guid reader, IReadOnlySet<Guid> followed, CancellationToken cancellationToken)
     {
         if (!await timelines.CreateEmpty(reader, cancellationToken))
         {
             return; // another request is building it, or a fanout's reader made it meanwhile
         }
 
-        var authors = (await following.Of(reader, cancellationToken)).Append(reader).Distinct().ToList();
+        var authors = followed.Append(reader).Distinct().ToList();
         var recent = await posts.RecentByAuthors(authors, BuildPerAuthor(authors.Count), cancellationToken);
         await timelines.Fill(reader, [.. recent.OrderByDescending(p => TimelineRules.Score(p.PostId)).Take(TimelineRules.MaxEntries).Select(p => p.PostId)], cancellationToken);
     }
@@ -107,5 +114,20 @@ public sealed class ReadFeedHandler(ITimelines timelines, IPostSummaries posts, 
         return entries
             .Where(e => found.ContainsKey(e.PostId) && authors.ContainsKey(found[e.PostId].AuthorId))
             .Select(e => new FeedItem(found[e.PostId], authors[found[e.PostId].AuthorId]));
+    }
+}
+
+/// <summary>What one reader may see on a page, decided at read time from the current relationships.</summary>
+public sealed class ReadFilter(Guid reader, IReadOnlySet<Guid> followed, IReadOnlySet<Guid> hidden)
+{
+    public bool Shows(FeedItem item)
+    {
+        var author = item.Author.AccountId;
+        if (author == reader)
+        {
+            return true;
+        }
+
+        return item.Author.Active && !hidden.Contains(author) && followed.Contains(author);
     }
 }

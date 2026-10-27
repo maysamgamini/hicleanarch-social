@@ -52,6 +52,16 @@ internal sealed class InMemoryTimelines : ITimelines
         return Task.CompletedTask;
     }
 
+    public Task Remove(Guid owner, IReadOnlyList<Guid> postIds, CancellationToken cancellationToken)
+    {
+        if (_timelines.TryGetValue(owner, out var set))
+        {
+            set.RemoveWhere(e => postIds.Contains(e.Post));
+        }
+
+        return Task.CompletedTask;
+    }
+
     private void Add(Guid owner, Guid post)
     {
         var set = _timelines[owner];

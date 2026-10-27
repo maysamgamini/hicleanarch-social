@@ -71,3 +71,45 @@ internal sealed class InProcessFollowing(IDispatcher dispatcher) : IFollowing
         return result.IsSuccess ? result.Value : throw new InvalidOperationException($"Relationships refused a read: {result.Errors[0].Code}");
     }
 }
+
+/// <summary>Timeline's IHiddenAuthors answered in process by Relationships' GetHiddenAuthors, once per page.</summary>
+internal sealed class InProcessHiddenAuthors(IDispatcher dispatcher) : IHiddenAuthors
+{
+    public async Task<IReadOnlyCollection<Guid>> Of(Guid reader, CancellationToken cancellationToken)
+    {
+        var result = await dispatcher.Query<GetHiddenAuthors, HiddenAuthors>(new GetHiddenAuthors(reader), cancellationToken);
+        return result.IsSuccess ? result.Value.AccountIds : throw new InvalidOperationException($"Relationships refused a read: {result.Errors[0].Code}");
+    }
+}
+
+/// <summary>Relationship events, turned into Timeline's own commands: best-effort upkeep of the timelines.</summary>
+internal sealed class TimelineUpkeep(IDispatcher dispatcher) :
+    IIntegrationEventHandler<AccountBlocked>, IIntegrationEventHandler<FollowEnded>, IIntegrationEventHandler<FollowStarted>
+{
+    public async Task Handle(AccountBlocked integrationEvent, CancellationToken cancellationToken)
+    {
+        await Send(new RemoveAuthor(integrationEvent.BlockerId, integrationEvent.BlockedId), cancellationToken);
+        await Send(new RemoveAuthor(integrationEvent.BlockedId, integrationEvent.BlockerId), cancellationToken);
+    }
+
+    public Task Handle(FollowEnded integrationEvent, CancellationToken cancellationToken) =>
+        Send(new RemoveAuthor(integrationEvent.FollowerId, integrationEvent.FolloweeId), cancellationToken);
+
+    public async Task Handle(FollowStarted integrationEvent, CancellationToken cancellationToken)
+    {
+        var result = await dispatcher.Send<AddRecentPosts, int>(new AddRecentPosts(integrationEvent.FollowerId, integrationEvent.FolloweeId), cancellationToken);
+        if (!result.IsSuccess)
+        {
+            throw new InvalidOperationException(result.Errors[0].Code);
+        }
+    }
+
+    private async Task Send(RemoveAuthor command, CancellationToken cancellationToken)
+    {
+        var result = await dispatcher.Send<RemoveAuthor, int>(command, cancellationToken);
+        if (!result.IsSuccess)
+        {
+            throw new InvalidOperationException(result.Errors[0].Code);
+        }
+    }
+}

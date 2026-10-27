@@ -37,6 +37,9 @@ public interface ITimelines
 
     /// <summary>Moves the expiry: a timeline lives while it is read.</summary>
     Task Touch(Guid owner, CancellationToken cancellationToken);
+
+    /// <summary>Removes these posts from the owner's timeline, if they are there.</summary>
+    Task Remove(Guid owner, IReadOnlyList<Guid> postIds, CancellationToken cancellationToken);
 }
 
 /// <summary>An author's audience, a page at a time, in follower-id order.</summary>
@@ -71,4 +74,10 @@ public interface IProfiles
 public interface IFollowing
 {
     Task<IReadOnlyList<Guid>> Of(Guid reader, CancellationToken cancellationToken);
+}
+
+/// <summary>The authors a reader must not see: blocked either way, or muted by the reader.</summary>
+public interface IHiddenAuthors
+{
+    Task<IReadOnlyCollection<Guid>> Of(Guid reader, CancellationToken cancellationToken);
 }

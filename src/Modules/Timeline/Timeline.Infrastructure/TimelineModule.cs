@@ -8,6 +8,8 @@ using Microsoft.Extensions.DependencyInjection;
 
 using Posts.Contracts;
 
+using Relationships.Contracts;
+
 using Social.BuildingBlocks.Application;
 using Social.BuildingBlocks.Infrastructure;
 using Social.BuildingBlocks.Infrastructure.Events;
@@ -37,13 +39,18 @@ public static class TimelineModule
         // Adding a member that is already there changes nothing, so the fanout needs no inbox.
         services.AddModuleWithoutInbox(ModuleName.Value);
         services.AddEventHandler<PostPublished, FanOutOnPostPublished>(ModuleName.Value);
+        // Best-effort upkeep: the read filter is what guarantees a page; these only clean the timelines.
+        services.AddEventHandler<AccountBlocked, TimelineUpkeep>(ModuleName.Value);
+        services.AddEventHandler<FollowEnded, TimelineUpkeep>(ModuleName.Value);
+        services.AddEventHandler<FollowStarted, TimelineUpkeep>(ModuleName.Value);
         return services
             .AddTimelineApplication()
             .AddSingleton<ITimelines, ValkeyTimelines>()
             .AddScoped<IFollowerPages, InProcessFollowerPages>()
             .AddScoped<IPostSummaries, InProcessPostSummaries>()
             .AddScoped<IProfiles, InProcessProfiles>()
-            .AddScoped<IFollowing, InProcessFollowing>();
+            .AddScoped<IFollowing, InProcessFollowing>()
+            .AddScoped<IHiddenAuthors, InProcessHiddenAuthors>();
     }
 
     public static IEndpointRouteBuilder MapTimelineEndpoints(this IEndpointRouteBuilder app)
