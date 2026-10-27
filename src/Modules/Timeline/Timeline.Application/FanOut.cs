@@ -41,5 +41,7 @@ public sealed class FanOutHandler(ITimelines timelines, IFollowerPages followers
 public static class TimelineApplication
 {
     public static IServiceCollection AddTimelineApplication(this IServiceCollection services) =>
-        services.AddScoped<ICommandHandler<FanOut, FanOutResult>, FanOutHandler>();
+        services
+            .AddScoped<ICommandHandler<FanOut, FanOutResult>, FanOutHandler>()
+            .AddScoped<IQueryHandler<ReadFeed, FeedPage>, ReadFeedHandler>();
 }

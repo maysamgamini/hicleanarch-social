@@ -22,28 +22,17 @@ public class FanOutTests
         }
     }
 
-    private sealed class Recorded : ITimelines
-    {
-        public List<Guid> Owners { get; } = [];
-
-        public Task<int> AddToExisting(IReadOnlyList<Guid> owners, Guid postId, CancellationToken cancellationToken)
-        {
-            Owners.AddRange(owners);
-            return Task.FromResult(owners.Count);
-        }
-    }
-
     [Fact]
     public async Task The_audience_is_read_a_thousand_at_a_time_and_the_author_is_included()
     {
-        var (audience, timelines, author) = (new Audience(2_500), new Recorded(), Guid.NewGuid());
+        var (audience, timelines, author) = (new Audience(2_500), new InMemoryTimelines(), Guid.NewGuid());
 
         var result = await new FanOutHandler(timelines, audience).Handle(new FanOut(Guid.CreateVersion7(), author), Ct);
 
         Assert.Equal([1_000, 1_000, 500], audience.PageSizes);
-        Assert.Equal(2_501, timelines.Owners.Distinct().Count());
-        Assert.Contains(author, timelines.Owners);
-        Assert.Equal(new FanOutResult(2_500, 2_501), result.Value);
+        Assert.Equal(2_501, timelines.Written.Distinct().Count());
+        Assert.Contains(author, timelines.Written);
+        Assert.Equal(2_500, result.Value.FollowersPaged);
     }
 
     [Fact]
