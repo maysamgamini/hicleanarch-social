@@ -40,6 +40,7 @@ public static class RelationshipsModule
         services.AddPublishedEvent<AccountUnmuted>();
         services.AddKeyedScoped<ITransactionScope>(ModuleName.Value, (sp, _) => new ModuleTransaction<RelationshipsDbContext>(sp.GetRequiredService<RelationshipsDbContext>()));
         services.AddSingleton<IModuleMigrator, RelationshipsMigrator>();
+        services.AddHostedService<RelationshipsMonitor>();
         services.AddSingleton(new ModuleDatabase("Relationships", RelationshipsDbContext.Schema, connectionString));
         return services
             .AddRelationshipsApplication()

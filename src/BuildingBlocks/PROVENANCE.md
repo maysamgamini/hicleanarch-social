@@ -74,3 +74,4 @@ upstream tag. Each later re-vendor is a commit of its own with a row below.
 |---|---|---|---|
 | s2-l07 | Infrastructure/Persistence/RawSql.cs | added | SQL on a module context's connection and open transaction, for the statements that are rules (pair lock, guarded counter, keyset pages); first written in Relationships (s2-l04), shared once Posts needed it too. |
 | s2-l08 | Infrastructure/Events/ModuleWithoutInbox.cs | added | A module whose handlers are idempotent by construction and that publishes nothing (Timeline before it has a schema) registers with the dispatcher without an outbox or an inbox (spec §6.1: "an inbox if a handler is not idempotent by itself"). |
+| s2-l19 | Infrastructure/Events/OutboxDispatcher.cs | changed | `outbox.oldest_undelivered_age` reports one measurement per module, tagged `module`, so each module's outbox has its own alarm (the age over all modules is still kept and reported before the first sweep). |

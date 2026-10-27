@@ -181,20 +181,31 @@ run "no_service_before_the_first_migration" {
   }
 }
 
-run "the_acknowledgments_have_alarms_on_metrics_the_program_emits" {
+run "every_alarm_names_a_metric_the_program_emits" {
   command = apply
+
+  assert {
+    condition = alltrue(concat(
+      [for a in aws_cloudwatch_metric_alarm.invariant : contains(local.metrics, a.metric_name)],
+      [for a in aws_cloudwatch_metric_alarm.outbox_age : contains(local.metrics, a.metric_name)],
+      [for a in [aws_cloudwatch_metric_alarm.fanout_lag, aws_cloudwatch_metric_alarm.projection_lag, aws_cloudwatch_metric_alarm.feed_p99] : contains(local.metrics, a.metric_name)],
+    ))
+    error_message = "Every alarm names a metric the program emits."
+  }
+
+  assert {
+    condition     = alltrue([for a in aws_cloudwatch_metric_alarm.invariant : a.threshold == 0 && a.comparison_operator == "GreaterThanThreshold"])
+    error_message = "An invariant gauge alarms on anything above zero."
+  }
+
+  assert {
+    condition     = length(aws_cloudwatch_metric_alarm.invariant) == 3 && length(aws_cloudwatch_metric_alarm.outbox_age) == 4
+    error_message = "Each invariant gauge and each module's outbox has an alarm."
+  }
 
   assert {
     condition     = aws_cloudwatch_metric_alarm.fanout_lag.threshold == 60 && aws_cloudwatch_metric_alarm.fanout_lag.extended_statistic == "p99"
     error_message = "Fanned out within a minute at p99 is the alarm's line."
-  }
-
-  assert {
-    condition = alltrue([
-      contains(local.metrics, aws_cloudwatch_metric_alarm.fanout_lag.metric_name),
-      contains(local.metrics, aws_cloudwatch_metric_alarm.outbox_age.metric_name),
-    ])
-    error_message = "Every alarm names a metric the program emits."
   }
 }
 

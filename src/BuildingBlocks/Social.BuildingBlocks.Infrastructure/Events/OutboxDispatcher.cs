@@ -97,12 +97,18 @@ public sealed partial class OutboxDispatcher(
 
     private double _oldestUndeliveredSeconds;
 
+    // The same age per module, so each module's outbox has an alarm of its own.
+    private readonly ConcurrentDictionary<string, double> _oldestByModule = new();
+
     public string Name => "outbox dispatcher";
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        Meter.CreateObservableGauge("outbox.oldest_undelivered_age", () => _oldestUndeliveredSeconds, "s",
-            "Age of the oldest event not yet delivered to every handler");
+        Meter.CreateObservableGauge("outbox.oldest_undelivered_age",
+            () => _oldestByModule.IsEmpty
+                ? [new Measurement<double>(_oldestUndeliveredSeconds)]
+                : _oldestByModule.Select(m => new Measurement<double>(m.Value, new KeyValuePair<string, object?>("module", m.Key))),
+            "s", "Age of the oldest event not yet delivered to every handler, per module");
         var workers = Enumerable.Range(0, Math.Max(1, options.Value.MaxConcurrentDeliveries)).Select(_ => Work(stoppingToken));
         await Task.WhenAll([Sweep(stoppingToken), .. workers]);
     }
@@ -307,7 +313,9 @@ public sealed partial class OutboxDispatcher(
         {
             try
             {
-                oldest = Math.Max(oldest, (await module.OldestUndeliveredAge(cancellationToken))?.TotalSeconds ?? 0);
+                var age = (await module.OldestUndeliveredAge(cancellationToken))?.TotalSeconds ?? 0;
+                _oldestByModule[module.Module] = age;
+                oldest = Math.Max(oldest, age);
                 foreach (var record in await module.Undelivered(occurredBefore, options.Value.SweepBatch, cancellationToken))
                 {
                     if (!_delivering.ContainsKey(record.EventId) && _queued.TryAdd(record.EventId, 0))

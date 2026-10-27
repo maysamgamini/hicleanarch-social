@@ -40,6 +40,7 @@ public static class TimelineModule
             ?? throw new InvalidOperationException("ConnectionStrings:Timeline is not set.");
         services.AddDbContext<TimelineDbContext>(db => TimelineDbOptions.Configure((DbContextOptionsBuilder<TimelineDbContext>)db, connectionString));
         services.AddSingleton<IModuleMigrator, TimelineMigrator>();
+        services.AddHostedService<TimelineMonitor>();
         services.AddSingleton(new ModuleDatabase("Timeline", TimelineDbContext.Schema, connectionString));
         var keys = configuration.GetSection("Timeline:Cursor:Keys");
         services.AddSingleton(new FeedCursors(new CursorKeys(
@@ -68,7 +69,9 @@ public static class TimelineModule
     {
         app.MapGet("/v1/feed", async (int? limit, string? cursor, ClaimsPrincipal user, IDispatcher dispatcher, CancellationToken ct) =>
         {
+            var started = System.Diagnostics.Stopwatch.GetTimestamp();
             var page = await dispatcher.Query<ReadFeed, FeedPage>(new ReadFeed(user.UserId(), limit ?? ReadFeedHandler.DefaultLimit, cursor), ct);
+            TimelineMetrics.FeedDuration.Record(System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds);
             return page.IsSuccess
                 ? Results.Ok(FeedReply.Of(page.Value))
                 // A bad cursor is a malformed request, not a rule broken: 400.

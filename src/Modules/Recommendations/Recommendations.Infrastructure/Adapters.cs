@@ -1,3 +1,5 @@
+using System.Diagnostics.Metrics;
+
 using Accounts.Contracts;
 
 using Recommendations.Application;
@@ -25,7 +27,15 @@ internal sealed class GraphProjectionHandlers(IDispatcher dispatcher) :
 
     public Task Handle(AccountDeactivated e, CancellationToken ct) => Send(new ProjectDeactivation(e.AccountId), ct);
 
-    public Task Handle(FollowStarted e, CancellationToken ct) => Edge(EdgeKind.Follows, e.FollowerId, e.FolloweeId, e.PairVersion, true, e.OccurredAt, ct);
+    /// <summary>How long a follow takes to reach the graph: from FollowStarted's commit to its edge.</summary>
+    public static readonly Histogram<double> ProjectionLag = new Meter("Social.Recommendations").CreateHistogram<double>(
+        "social.projection.lag", "s", "From a FollowStarted's commit to its edge in the graph");
+
+    public async Task Handle(FollowStarted e, CancellationToken ct)
+    {
+        await Edge(EdgeKind.Follows, e.FollowerId, e.FolloweeId, e.PairVersion, true, e.OccurredAt, ct);
+        ProjectionLag.Record((DateTimeOffset.UtcNow - e.OccurredAt).TotalSeconds);
+    }
 
     public Task Handle(FollowEnded e, CancellationToken ct) => Edge(EdgeKind.Follows, e.FollowerId, e.FolloweeId, e.PairVersion, false, e.OccurredAt, ct);
 

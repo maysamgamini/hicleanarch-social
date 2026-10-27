@@ -19,6 +19,10 @@ internal static class TimelineMetrics
     public static readonly Histogram<double> FanoutLag = Meter.CreateHistogram<double>("social.fanout.lag", "s",
         "From a post's commit to its last timeline write");
 
+    /// <summary>A feed page, from request to reply: its p99 is the read path's budget.</summary>
+    public static readonly Histogram<double> FeedDuration = Meter.CreateHistogram<double>("social.feed.duration", "ms",
+        "Time to answer GET /v1/feed");
+
     /// <summary>Seen: the first time a reader's page held a post, counted on a sample of reads.</summary>
     public static readonly Counter<long> Seen = Meter.CreateCounter<long>("social.posts.seen", "{post}",
         "First hydrations of a post per reader, sampled");
