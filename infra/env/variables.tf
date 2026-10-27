@@ -50,3 +50,9 @@ variable "collector_image" {
   type        = string
   default     = "public.ecr.aws/aws-observability/aws-otel-collector:v0.49.0"
 }
+
+variable "neptune_engine_version" {
+  description = "Neptune engine; 1.3.2.0 or later runs every query in Queries.cypher (the opt-in test checks it)."
+  type        = string
+  default     = "1.4.5.1"
+}

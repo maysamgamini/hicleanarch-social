@@ -2,7 +2,6 @@
 
   <ItemGroup>
     <PackageReference Include="Testcontainers.Neo4j" />
-    <PackageReference Include="Testcontainers.PostgreSql" />
   </ItemGroup>
 
   <ItemGroup>

@@ -11,7 +11,8 @@ public enum EdgeKind
 /// <summary>
 /// A versioned edge, as an event reports it. An edge is never deleted by an event: it is turned on or
 /// off, and only by an event whose pair version is higher than the one the edge holds, so a late or
-/// repeated event changes nothing. <paramref name="Since"/> is when the follow (or block, or mute) began.
+/// repeated event changes nothing. <paramref name="Since"/> is when the edge took its state: when the
+/// follow (or block, or mute) began, or, for an edge turned off, when it ended.
 /// </summary>
 public sealed record EdgeChange(EdgeKind Kind, Guid From, Guid To, long Version, bool On, DateTimeOffset Since);
 

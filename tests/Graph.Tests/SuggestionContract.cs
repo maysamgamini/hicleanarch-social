@@ -5,7 +5,8 @@ namespace Graph.Tests;
 
 /// <summary>
 /// The rules of who to follow, as one suite every adapter of IGraphReads and IGraphProjection must
-/// pass: PostgreSQL first (s2-l13), the graph database next. The assertions never change between them.
+/// pass. PostgreSQL's adapter passed it (s2-l13, s2-l14) and was removed; the graph database's passes
+/// it now, with the same assertions.
 /// </summary>
 public abstract class SuggestionContract : IAsyncLifetime
 {

@@ -25,3 +25,17 @@ public sealed record RelationshipCounts(long Followers, long Following);
 public sealed record GetHiddenAuthors(Guid ViewerId) : IQuery<HiddenAuthors>;
 
 public sealed record HiddenAuthors(IReadOnlyList<Guid> AccountIds);
+
+/// <summary>The follower and following counts of many accounts at once; an account with no row counts zero.</summary>
+public sealed record GetCountsOf(IReadOnlyList<Guid> AccountIds) : IQuery<IReadOnlyList<AccountCounts>>;
+
+public sealed record AccountCounts(Guid AccountId, long Followers, long Following);
+
+/// <summary>
+/// Every pair an account belongs to, as it stands, with the pair's version: what a projection needs to
+/// re-project the account. A relationship that is not there is reported off.
+/// </summary>
+public sealed record GetPairsOf(Guid AccountId) : IQuery<IReadOnlyList<PairState>>;
+
+/// <summary>One direction of one kind of relationship between two accounts. Kind: Follow, Block or Mute.</summary>
+public sealed record PairState(string Kind, Guid From, Guid To, bool On, long PairVersion);

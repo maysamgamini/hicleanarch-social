@@ -51,5 +51,8 @@ public static class RecommendationsApplication
             .AddScoped<ProjectionHandlers>()
             .AddScoped<ICommandHandler<ProjectAccount, bool>>(sp => sp.GetRequiredService<ProjectionHandlers>())
             .AddScoped<ICommandHandler<ProjectDeactivation, bool>>(sp => sp.GetRequiredService<ProjectionHandlers>())
-            .AddScoped<ICommandHandler<ProjectEdge, bool>>(sp => sp.GetRequiredService<ProjectionHandlers>());
+            .AddScoped<ICommandHandler<ProjectEdge, bool>>(sp => sp.GetRequiredService<ProjectionHandlers>())
+            .AddScoped<MaintenanceHandlers>()
+            .AddScoped<ICommandHandler<Reconcile, ReconciliationReport>>(sp => sp.GetRequiredService<MaintenanceHandlers>())
+            .AddScoped<ICommandHandler<Compact, long>>(sp => sp.GetRequiredService<MaintenanceHandlers>());
 }

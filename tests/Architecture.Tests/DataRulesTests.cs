@@ -26,7 +26,8 @@ public class DataRulesTests
             var create = factory.GetMethod("CreateDbContext")!;
             using var context = (DbContext)create.Invoke(Activator.CreateInstance(factory, nonPublic: true), [Array.Empty<string>()])!;
             var schemas = context.Model.GetEntityTypes().Select(e => e.GetSchema()).Distinct().ToList();
-            Assert.Equal([module.ToLowerInvariant()], schemas);
+            Assert.Equal(module.ToLowerInvariant(), context.Model.GetDefaultSchema());
+            Assert.All(schemas, s => Assert.Equal(module.ToLowerInvariant(), s));
         }
     }
 }

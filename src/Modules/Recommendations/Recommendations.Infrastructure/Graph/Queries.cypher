@@ -24,7 +24,7 @@ MERGE (a)-[r:FOLLOWS]->(b)
   ON CREATE SET r.v = 0, r.on = false, r.since = $since
 WITH a, b, r, r.v < $v AS newer, r.on AS was
 SET r.on = CASE WHEN newer THEN $on ELSE r.on END,
-    r.since = CASE WHEN newer AND $on THEN $since ELSE r.since END,
+    r.since = CASE WHEN newer THEN $since ELSE r.since END,
     r.v = CASE WHEN newer THEN $v ELSE r.v END,
     a.following = a.following + CASE WHEN newer AND was <> $on THEN $step ELSE 0 END,
     b.followers = b.followers + CASE WHEN newer AND was <> $on THEN $step ELSE 0 END
@@ -70,3 +70,53 @@ WHERE c.id <> $me
 RETURN c.id AS id, c.handle AS handle, count(*) AS mutual
 ORDER BY mutual DESC, id
 LIMIT $results
+
+// name: AccountsPage
+// The reconciliation's walk over every account, in id order, a page at a time.
+MATCH (a:Account)
+WHERE a.id > $after
+RETURN a.id AS id, a.followers AS followers, a.following AS following
+ORDER BY id
+LIMIT $limit
+
+// name: RecountDegrees
+// Degrees from the edges that are on: what the projection keeps, rebuilt from scratch. The node is
+// locked first, as a projection locks it, so no edge flips between the count and the write.
+MATCH (a:Account {id: $id})
+SET a.lock = true
+WITH a
+OPTIONAL MATCH (a)<-[i:FOLLOWS {on: true}]-(:Account)
+WITH a, count(i) AS followers
+OPTIONAL MATCH (a)-[o:FOLLOWS {on: true}]->(:Account)
+WITH a, followers, count(o) AS following
+SET a.followers = followers, a.following = following
+REMOVE a.lock
+RETURN a.id AS id
+
+// name: DuplicateAccounts
+MATCH (a:Account)
+WITH a.id AS id, count(*) AS nodes
+WHERE nodes > 1
+RETURN id
+
+// name: CompactFollows
+// Edges off since before the cutoff (epoch milliseconds: no datetime arithmetic), in bounded batches.
+MATCH (:Account)-[r:FOLLOWS {on: false}]->(:Account)
+WHERE r.since < $cutoff
+WITH r LIMIT 10000
+DELETE r
+RETURN count(*) AS deleted
+
+// name: CompactBlocks
+MATCH (:Account)-[r:BLOCKS {on: false}]->(:Account)
+WHERE r.since < $cutoff
+WITH r LIMIT 10000
+DELETE r
+RETURN count(*) AS deleted
+
+// name: CompactMutes
+MATCH (:Account)-[r:MUTES {on: false}]->(:Account)
+WHERE r.since < $cutoff
+WITH r LIMIT 10000
+DELETE r
+RETURN count(*) AS deleted

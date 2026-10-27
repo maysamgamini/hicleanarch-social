@@ -10,7 +10,7 @@ namespace Recommendations.Infrastructure.Graph;
 /// in tests, Amazon Neptune on AWS. Writes and reads run as managed transactions, which the driver
 /// retries on transient errors (a deadlock between two projections, Neptune's false conflicts).
 /// </summary>
-internal sealed class Neo4jGraph(IDriver driver) : IGraphProjection, IGraphReads
+internal sealed class Neo4jGraph(IDriver driver) : IGraphProjection, IGraphReads, IGraphMaintenance
 {
     public async Task UpsertAccount(Guid accountId, string handle, CancellationToken cancellationToken) =>
         await Write("UpsertAccount", new { id = Id(accountId), handle });
@@ -56,6 +56,39 @@ internal sealed class Neo4jGraph(IDriver driver) : IGraphProjection, IGraphReads
             return (IReadOnlyList<Suggestion>)[.. (await cursor.ToListAsync()).Select(r =>
                 new Suggestion(Guid.Parse(r["id"].As<string>()), r["handle"].As<string>(), r["mutual"].As<long>()))];
         });
+    }
+
+    public async Task<IReadOnlyList<GraphDegrees>> Accounts(Guid? after, int limit, CancellationToken cancellationToken) =>
+        [.. (await Read("AccountsPage", new { after = after is { } a ? Id(a) : "", limit })).Select(r =>
+            new GraphDegrees(Guid.Parse(r["id"].As<string>()), r["followers"].As<long>(), r["following"].As<long>()))];
+
+    public async Task RecountDegrees(Guid accountId, CancellationToken cancellationToken) =>
+        await Write("RecountDegrees", new { id = Id(accountId) });
+
+    public async Task<IReadOnlyList<Guid>> DuplicateAccounts(CancellationToken cancellationToken) =>
+        [.. (await Read("DuplicateAccounts", new { })).Select(r => Guid.Parse(r["id"].As<string>()))];
+
+    public async Task<long> CompactOffEdges(DateTimeOffset cutoff, CancellationToken cancellationToken)
+    {
+        long deleted = 0;
+        foreach (var query in new[] { "CompactFollows", "CompactBlocks", "CompactMutes" })
+        {
+            long batch;
+            do
+            {
+                batch = (await Write(query, new { cutoff = cutoff.ToUnixTimeMilliseconds() }))[0]["deleted"].As<long>();
+                deleted += batch;
+            }
+            while (batch == 10_000);
+        }
+
+        return deleted;
+    }
+
+    private async Task<List<IRecord>> Read(string query, object parameters)
+    {
+        await using var session = driver.AsyncSession();
+        return await session.ExecuteReadAsync(async tx => await (await tx.RunAsync(CypherQueries.Get(query), parameters)).ToListAsync());
     }
 
     private async Task<List<IRecord>> Write(string query, object parameters)

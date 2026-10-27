@@ -24,6 +24,29 @@ internal sealed class SqlRelationshipReads(RelationshipsDbContext db) : IRelatio
         return rows.Count == 0 ? (0, 0) : rows[0];
     }
 
+    public async Task<IReadOnlyList<(Guid Account, long Followers, long Following)>> CountsOf(IReadOnlyList<Guid> accounts, CancellationToken cancellationToken) =>
+        await db.Read("SELECT account_id, followers, following FROM relationships.relationship_counts WHERE account_id = ANY(@ids)",
+            r => (r.GetGuid(0), r.GetInt64(1), r.GetInt64(2)), cancellationToken, ("ids", accounts.ToArray()));
+
+    // Every pair the account was ever part of, and for each the six relationships, on or off.
+    public async Task<IReadOnlyList<(string Kind, Guid From, Guid To, bool On, long Version)>> PairsOf(Guid account, CancellationToken cancellationToken) =>
+        await db.Read("""
+            WITH pairs AS (
+                SELECT low_id, high_id, version FROM relationships.pair_versions WHERE low_id = @a OR high_id = @a),
+            directions AS (
+                SELECT low_id AS from_id, high_id AS to_id, version FROM pairs
+                UNION ALL SELECT high_id, low_id, version FROM pairs),
+            kinds(kind) AS (VALUES ('Follow'), ('Block'), ('Mute'))
+            SELECT k.kind, d.from_id, d.to_id,
+                CASE k.kind
+                    WHEN 'Follow' THEN EXISTS (SELECT 1 FROM relationships.follows f WHERE f.follower_id = d.from_id AND f.followee_id = d.to_id)
+                    WHEN 'Block' THEN EXISTS (SELECT 1 FROM relationships.blocks b WHERE b.blocker_id = d.from_id AND b.blocked_id = d.to_id)
+                    ELSE EXISTS (SELECT 1 FROM relationships.mutes m WHERE m.muter_id = d.from_id AND m.muted_id = d.to_id)
+                END,
+                d.version
+            FROM directions d CROSS JOIN kinds k
+            """, r => (r.GetString(0), r.GetGuid(1), r.GetGuid(2), r.GetBoolean(3), r.GetInt64(4)), cancellationToken, ("a", account));
+
     public async Task<IReadOnlyList<Guid>> HiddenFrom(Guid viewer, CancellationToken cancellationToken) =>
         await db.Read("""
             SELECT blocked_id FROM relationships.blocks WHERE blocker_id = @viewer

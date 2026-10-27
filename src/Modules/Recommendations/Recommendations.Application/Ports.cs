@@ -29,3 +29,30 @@ public interface IGraphReads
     /// <summary>Friends of friends: accounts the reader's intermediates follow, with how many lead to each.</summary>
     Task<IReadOnlyList<Suggestion>> WhoToFollow(Guid reader, TraversalLimits limits, CancellationToken cancellationToken);
 }
+
+/// <summary>An account's degrees as the graph holds them.</summary>
+public sealed record GraphDegrees(Guid AccountId, long Followers, long Following);
+
+/// <summary>The graph's own upkeep: what the nightly jobs read and repair.</summary>
+public interface IGraphMaintenance
+{
+    /// <summary>Accounts in id order after <paramref name="after"/>, with their degree properties.</summary>
+    Task<IReadOnlyList<GraphDegrees>> Accounts(Guid? after, int limit, CancellationToken cancellationToken);
+
+    /// <summary>Sets the account's degree properties from its edges that are on.</summary>
+    Task RecountDegrees(Guid accountId, CancellationToken cancellationToken);
+
+    /// <summary>Ids held by more than one Account node (possible on Neptune, which has no uniqueness constraint).</summary>
+    Task<IReadOnlyList<Guid>> DuplicateAccounts(CancellationToken cancellationToken);
+
+    /// <summary>Deletes edges that have been off since before <paramref name="cutoff"/>. Returns how many.</summary>
+    Task<long> CompactOffEdges(DateTimeOffset cutoff, CancellationToken cancellationToken);
+}
+
+/// <summary>The source of truth, asked only by the nightly reconciliation: counts, and every pair of an account.</summary>
+public interface IRelationshipSource
+{
+    Task<IReadOnlyDictionary<Guid, (long Followers, long Following)>> Counts(IReadOnlyList<Guid> accounts, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<EdgeChange>> PairsOf(Guid account, DateTimeOffset at, CancellationToken cancellationToken);
+}

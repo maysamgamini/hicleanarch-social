@@ -44,6 +44,12 @@ mock_provider "aws" {
     }
   }
 
+  mock_resource "aws_neptune_cluster" {
+    defaults = {
+      endpoint = "graph.cluster-mock.us-east-1.neptune.amazonaws.com"
+    }
+  }
+
   mock_resource "aws_ecs_cluster" {
     defaults = {
       arn = "arn:aws:ecs:us-east-1:123456789012:cluster/mock"
@@ -189,5 +195,29 @@ run "the_acknowledgments_have_alarms_on_metrics_the_program_emits" {
       contains(local.metrics, aws_cloudwatch_metric_alarm.outbox_age.metric_name),
     ])
     error_message = "Every alarm names a metric the program emits."
+  }
+}
+
+run "neptune_is_serverless_destroyable_and_reached_from_the_tasks_only_over_tls" {
+  command = apply
+
+  assert {
+    condition     = aws_neptune_cluster.graph.deletion_protection == false && aws_neptune_cluster.graph.skip_final_snapshot
+    error_message = "One destroy removes the graph, with no snapshot left behind."
+  }
+
+  assert {
+    condition     = aws_neptune_cluster_instance.graph.instance_class == "db.serverless" && aws_neptune_cluster.graph.serverless_v2_scaling_configuration[0].min_capacity == 1
+    error_message = "The sandbox's graph is serverless, at its smallest."
+  }
+
+  assert {
+    condition     = aws_vpc_security_group_ingress_rule.graph_from_tasks.from_port == 8182 && aws_vpc_security_group_ingress_rule.graph_from_tasks.cidr_ipv4 == null
+    error_message = "Bolt on 8182, from the tasks' security group only."
+  }
+
+  assert {
+    condition     = startswith(local.graph_uri, "bolt+s://") && strcontains(aws_ecs_task_definition.api.container_definitions, "Graph__Uri")
+    error_message = "The program reaches Neptune over Bolt with TLS."
   }
 }

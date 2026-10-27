@@ -56,3 +56,20 @@ public sealed class GetCountsHandler(IRelationshipReads reads) : IQueryHandler<G
         return Result.Success(new RelationshipCounts(followers, following));
     }
 }
+
+public sealed class GetCountsOfHandler(IRelationshipReads reads) : IQueryHandler<GetCountsOf, IReadOnlyList<AccountCounts>>
+{
+    public async Task<Result<IReadOnlyList<AccountCounts>>> Handle(GetCountsOf query, CancellationToken cancellationToken)
+    {
+        var found = (await reads.CountsOf([.. query.AccountIds.Distinct()], cancellationToken)).ToDictionary(c => c.Account);
+        return Result.Success<IReadOnlyList<AccountCounts>>([.. query.AccountIds.Distinct().Select(id =>
+            found.TryGetValue(id, out var c) ? new AccountCounts(id, c.Followers, c.Following) : new AccountCounts(id, 0, 0))]);
+    }
+}
+
+public sealed class GetPairsOfHandler(IRelationshipReads reads) : IQueryHandler<GetPairsOf, IReadOnlyList<PairState>>
+{
+    public async Task<Result<IReadOnlyList<PairState>>> Handle(GetPairsOf query, CancellationToken cancellationToken) =>
+        Result.Success<IReadOnlyList<PairState>>([.. (await reads.PairsOf(query.AccountId, cancellationToken))
+            .Select(p => new PairState(p.Kind, p.From, p.To, p.On, p.Version))]);
+}

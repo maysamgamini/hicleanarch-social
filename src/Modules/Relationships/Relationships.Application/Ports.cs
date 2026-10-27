@@ -49,6 +49,11 @@ public interface IRelationshipReads
 
     Task<(long Followers, long Following)> Counts(Guid account, CancellationToken cancellationToken);
 
+    Task<IReadOnlyList<(Guid Account, long Followers, long Following)>> CountsOf(IReadOnlyList<Guid> accounts, CancellationToken cancellationToken);
+
+    /// <summary>Every pair the account is in (from pair_versions), with each kind and direction on or off.</summary>
+    Task<IReadOnlyList<(string Kind, Guid From, Guid To, bool On, long Version)>> PairsOf(Guid account, CancellationToken cancellationToken);
+
     /// <summary>Blocked by the viewer, blocking the viewer, or muted by the viewer.</summary>
     Task<IReadOnlyList<Guid>> HiddenFrom(Guid viewer, CancellationToken cancellationToken);
 }

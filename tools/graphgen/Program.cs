@@ -13,7 +13,7 @@ Console.WriteLine($"graphgen: {options}");
 
 var graph = Generator.Build(options);
 Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
-    $"generated {graph.Accounts:N0} accounts, {graph.Edges.Count:N0} follows; max followers {graph.MaxFollowers:N0}, " +
+    $"generated {graph.Accounts:N0} accounts, {graph.Edges.Count:N0} follows (mean following {graph.MeanFollowing:F1}); max followers {graph.MaxFollowers:N0}, " +
     $"accounts with >= 10,000 followers: {graph.Supernodes:N0}"));
 
 await Loader.Load(options.Connection, graph);

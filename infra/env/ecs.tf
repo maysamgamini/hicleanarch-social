@@ -32,6 +32,8 @@ locals {
       { name = "Auth__Authority", value = local.cognito_issuer },
       { name = "Auth__ClientId", value = aws_cognito_user_pool_client.api.id },
       { name = "ForwardedHeaders__KnownNetwork", value = aws_vpc.main.cidr_block },
+      { name = "Graph__Uri", value = local.graph_uri },
+      { name = "Graph__Auth", value = "none" },
     ]
     # SIGTERM, then this many seconds to finish requests, then SIGKILL.
     stopTimeout = 30
@@ -98,6 +100,8 @@ resource "aws_ecs_task_definition" "migrate" {
     environment = [
       { name = "Auth__Authority", value = local.cognito_issuer },
       { name = "Auth__ClientId", value = aws_cognito_user_pool_client.api.id },
+      { name = "Graph__Uri", value = local.graph_uri },
+      { name = "Graph__Auth", value = "none" },
     ]
     secrets = concat(local.module_secrets, [local.owner_secret])
   })])

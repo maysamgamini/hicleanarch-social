@@ -30,14 +30,17 @@ internal sealed record Options(string Connection, int Accounts, double MeanFollo
 
 internal sealed record Graph(int Accounts, Guid[] Ids, List<(int From, int To)> Edges, int[] Followers, int[] Following)
 {
+    public double MeanFollowing => (double)Edges.Count / Accounts;
+
     public int MaxFollowers => Followers.Max();
 
     public int Supernodes => Followers.Count(f => f >= 10_000);
 }
 
 /// <summary>
-/// Out-degrees (how many each account follows) are drawn from a discrete power law with the given
-/// exponent, scaled to the mean and capped at 5,000 (the product's limit). Followees are drawn by
+/// Out-degrees (how many each account follows) are drawn from a power law with the given exponent,
+/// capped at 5,000 (the product's limit), then scaled so their mean is the one asked for (rounded at
+/// random, so small degrees keep their share). Followees are drawn by
 /// rank from a Zipf distribution (exponent 1), so a few accounts gather most followers: celebrities.
 /// The same seed always gives the same graph.
 /// </summary>
@@ -49,8 +52,10 @@ internal static class Generator
         var n = options.Accounts;
         var ids = Enumerable.Range(0, n).Select(i => Id(options.Seed, i)).ToArray();
 
-        // Pareto out-degrees: x_min * U^(-1/(a-1)), mean = x_min (a-1)/(a-2) for a > 2.
-        var xMin = options.MeanFollowing * (options.Exponent - 2) / (options.Exponent - 1);
+        // Pareto draws U^(-1/(a-1)), capped, then scaled to the asked mean.
+        var raw = Enumerable.Range(0, n).Select(_ => Math.Min(5_000.0, Math.Pow(random.NextDouble(), -1 / (options.Exponent - 1)))).ToArray();
+        var scale = options.MeanFollowing / raw.Average();
+        var degrees = raw.Select(r => Math.Clamp((int)Math.Floor((r * scale) + random.NextDouble()), 1, 5_000)).ToArray();
         var zipf = Zipf(n);
         var edges = new List<(int, int)>();
         var followers = new int[n];
@@ -58,9 +63,9 @@ internal static class Generator
         var seen = new HashSet<int>();
         for (var from = 0; from < n; from++)
         {
-            var degree = (int)Math.Min(5_000, Math.Max(1, Math.Round(xMin * Math.Pow(random.NextDouble(), -1 / (options.Exponent - 1)))));
+            var degree = degrees[from];
             seen.Clear();
-            for (var tries = 0; seen.Count < Math.Min(degree, n - 1) && tries < degree * 4; tries++)
+            for (var tries = 0; seen.Count < Math.Min(degree, n - 1) && tries < degree * 20; tries++)
             {
                 var to = Sample(zipf, random);
                 if (to != from && seen.Add(to))
