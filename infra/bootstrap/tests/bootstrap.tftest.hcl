@@ -60,3 +60,12 @@ run "images_are_immutable_and_scanned" {
     error_message = "Every pushed image is scanned."
   }
 }
+
+run "only_the_main_branch_of_this_repository_may_deploy" {
+  command = apply
+
+  assert {
+    condition     = output.deploy_subject == "repo:maysamgamini/hicleanarch-social:ref:refs/heads/main"
+    error_message = "The deploy role is taken only by workflows of the repository's main branch."
+  }
+}

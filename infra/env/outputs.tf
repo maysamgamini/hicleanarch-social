@@ -1,0 +1,38 @@
+output "api_url" {
+  description = "Where clients call the API."
+  value       = "http://${aws_lb.api.dns_name}"
+}
+
+output "cluster" {
+  value = aws_ecs_cluster.main.name
+}
+
+output "service" {
+  value = local.api_service
+}
+
+output "service_image" {
+  description = "What the API service runs; the next deploy keeps it until its migration has run."
+  value       = var.service_image
+}
+
+output "migrate_task_definition" {
+  value = aws_ecs_task_definition.migrate.arn
+}
+
+output "task_subnets" {
+  description = "Comma-separated, as aws ecs run-task wants them."
+  value       = join(",", aws_subnet.public[*].id)
+}
+
+output "task_security_group" {
+  value = aws_security_group.tasks.id
+}
+
+output "user_pool_id" {
+  value = aws_cognito_user_pool.users.id
+}
+
+output "user_pool_client_id" {
+  value = aws_cognito_user_pool_client.api.id
+}

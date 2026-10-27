@@ -1,0 +1,133 @@
+name: sandbox
+
+# Run only in a learner's own AWS account: apply the sandbox environment, deploy the current main,
+# smoke-test it, destroy it. Needs the repository variables AWS_DEPLOY_ROLE_ARN and TF_STATE_BUCKET
+# (outputs of infra/bootstrap, applied once by the learner). Without them, nothing runs.
+on:
+  workflow_dispatch:
+    inputs:
+      keep_minutes:
+        description: "Minutes to keep the environment up after the smoke test (0 = destroy at once)"
+        default: "0"
+  schedule:
+    - cron: "17 3 * * *" # nightly: destroy anything left up
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: sandbox
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+  TF_IN_AUTOMATION: "1"
+
+jobs:
+  run:
+    if: github.event_name == 'workflow_dispatch' && vars.AWS_DEPLOY_ROLE_ARN != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: opentofu/setup-opentofu@592200bd4b9bbf4772ace78f887668b1aee8f716 # v1.0.5
+        with:
+          tofu_wrapper: false
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
+
+      - name: Build and push the image
+        id: image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          image="$REGISTRY/hicleanarch-social/api:${GITHUB_SHA}"
+          docker build -t "$image" .
+          docker push "$image"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+
+      # The database is migrated before any task runs the new image: the first apply keeps the
+      # service on the image it runs now (none in a new environment), the second moves it.
+      - name: Apply, with the service on its current image
+        env:
+          IMAGE: ${{ steps.image.outputs.image }}
+          STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+        run: |
+          echo "TF_VAR_image=$IMAGE" >> "$GITHUB_ENV"
+          tofu -chdir=infra/env init -input=false -backend-config="bucket=$STATE_BUCKET"
+          current=$(tofu -chdir=infra/env output -raw service_image 2>/dev/null || true)
+          TF_VAR_image="$IMAGE" tofu -chdir=infra/env apply -input=false -auto-approve -var "service_image=$current"
+
+      - name: Migrate
+        run: |
+          out() { tofu -chdir=infra/env output -raw "$1"; }
+          task=$(aws ecs run-task --cluster "$(out cluster)" --launch-type FARGATE \
+            --task-definition "$(out migrate_task_definition)" \
+            --network-configuration "awsvpcConfiguration={subnets=[$(out task_subnets)],securityGroups=[$(out task_security_group)],assignPublicIp=ENABLED}" \
+            --query 'tasks[0].taskArn' --output text)
+          aws ecs wait tasks-stopped --cluster "$(out cluster)" --tasks "$task"
+          code=$(aws ecs describe-tasks --cluster "$(out cluster)" --tasks "$task" --query 'tasks[0].containers[0].exitCode' --output text)
+          test "$code" = "0"
+
+      - name: Roll the service onto the new image
+        run: |
+          tofu -chdir=infra/env apply -input=false -auto-approve -var "service_image=$TF_VAR_image"
+          aws ecs wait services-stable --cluster "$(tofu -chdir=infra/env output -raw cluster)" \
+            --services "$(tofu -chdir=infra/env output -raw service)"
+
+      - name: Sign in a test user
+        id: user
+        run: |
+          pool=$(tofu -chdir=infra/env output -raw user_pool_id)
+          client=$(tofu -chdir=infra/env output -raw user_pool_client_id)
+          email="smoke-${GITHUB_RUN_ID}@example.com"
+          password="Smoke-${GITHUB_RUN_ID}-$(openssl rand -hex 8)"
+          aws cognito-idp admin-create-user --user-pool-id "$pool" --username "$email" --message-action SUPPRESS >/dev/null
+          aws cognito-idp admin-set-user-password --user-pool-id "$pool" --username "$email" --password "$password" --permanent
+          token=$(aws cognito-idp initiate-auth --client-id "$client" --auth-flow USER_PASSWORD_AUTH \
+            --auth-parameters "USERNAME=$email,PASSWORD=$password" --query 'AuthenticationResult.AccessToken' --output text)
+          echo "::add-mask::$token"
+          echo "token=$token" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test
+        env:
+          TOKEN: ${{ steps.user.outputs.token }}
+        run: ./scripts/smoke.sh "$(tofu -chdir=infra/env output -raw api_url)"
+
+      - name: Keep it up for a while
+        if: inputs.keep_minutes != '0'
+        env:
+          KEEP_MINUTES: ${{ inputs.keep_minutes }}
+        run: |
+          case "$KEEP_MINUTES" in (*[!0-9]*|'') echo "keep_minutes must be a whole number" >&2; exit 1;; esac
+          sleep $(( KEEP_MINUTES * 60 ))
+
+      - name: Destroy
+        if: always()
+        env:
+          STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+        run: |
+          tofu -chdir=infra/env init -input=false -backend-config="bucket=$STATE_BUCKET"
+          tofu -chdir=infra/env destroy -input=false -auto-approve
+
+  sweep:
+    if: github.event_name == 'schedule' && vars.AWS_DEPLOY_ROLE_ARN != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: opentofu/setup-opentofu@592200bd4b9bbf4772ace78f887668b1aee8f716 # v1.0.5
+      - name: Destroy anything left up
+        env:
+          STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+        run: |
+          tofu -chdir=infra/env init -input=false -backend-config="bucket=$STATE_BUCKET"
+          tofu -chdir=infra/env destroy -input=false -auto-approve

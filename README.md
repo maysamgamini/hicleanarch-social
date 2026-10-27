@@ -23,7 +23,7 @@ src/BuildingBlocks/   vendored from hicleanarch-crowdfunding s3-l16 (see PROVENA
 src/Host/             composes the modules; it holds no rules
 src/Modules/          Accounts, Relationships, Posts, Timeline, Recommendations, Notifications
 tests/                architecture, unit, integration and graph tests
-infra/                Terraform, checked offline (fmt, validate, terraform test with mock providers)
+infra/                OpenTofu, checked offline (fmt, validate, tofu test with mock providers, an apply against Moto)
 scripts/              bb-diff.sh shows how the vendored BuildingBlocks differ from upstream
 ```
 

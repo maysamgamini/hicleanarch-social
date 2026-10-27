@@ -485,3 +485,6 @@ $RECYCLE.BIN/
 *.tfstate
 *.tfstate.*
 .terraform.lock.hcl.bak
+
+# Provider lock files are written by `tofu init` on each machine; versions are pinned by constraint in versions.tf.
+.terraform.lock.hcl

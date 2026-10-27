@@ -3,8 +3,10 @@ using System.Text.Json;
 using Accounts.Infrastructure;
 
 using Social.BuildingBlocks.Application;
+using Social.BuildingBlocks.Infrastructure.Hosting;
 using Social.BuildingBlocks.Infrastructure.Identity;
 using Social.BuildingBlocks.Infrastructure.Persistence;
+using Social.Host;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -26,6 +28,8 @@ if (args.FirstOrDefault() == "token")
     return;
 }
 
+builder.Logging.AddTraceCorrelatedConsole();
+
 // The API speaks snake_case JSON: display_name, account_id.
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower);
 builder.Services.AddProblemDetails();
@@ -34,7 +38,12 @@ builder.Services.AddExceptionHandler<DatabaseUnavailableHandler>();
 builder.Services.AddDispatcher();
 builder.Services.AddSingleton<DatabaseMigrator>();
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddTelemetry(builder.Configuration);
+// Cognito's tokens when Auth:Authority is set (on AWS); the local issuer's otherwise (development, tests).
 builder.Services.AddTokenAuthentication(builder.Configuration);
+builder.Services.AddProxyHeaders(builder.Configuration);
+builder.Services.AddGracefulStop();
+builder.Services.AddHealth(builder.Configuration);
 
 // Each module brings its own services and endpoints. The host only composes them.
 builder.Services.AddAccountsModule(builder.Configuration);
@@ -51,11 +60,13 @@ if (args.FirstOrDefault() == "migrate")
     return;
 }
 
+app.UseForwardedHeaders();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.MapHealth();
 app.MapAccountsEndpoints();
 
 await app.RunAsync();

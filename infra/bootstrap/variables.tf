@@ -9,3 +9,9 @@ variable "project" {
   type        = string
   default     = "hicleanarch-social"
 }
+
+variable "github_repository" {
+  description = "The repository whose main-branch workflows may deploy, as owner/name: the learner's own fork."
+  type        = string
+  default     = "maysamgamini/hicleanarch-social"
+}
