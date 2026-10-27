@@ -25,5 +25,6 @@ public static class RelationshipsApplication
             .AddScoped<IQueryHandler<GetFollowing, IReadOnlyList<Guid>>, GetFollowingHandler>()
             .AddScoped<IQueryHandler<GetCounts, RelationshipCounts>, GetCountsHandler>()
             .AddScoped<IQueryHandler<GetCountsOf, IReadOnlyList<AccountCounts>>, GetCountsOfHandler>()
-            .AddScoped<IQueryHandler<GetPairsOf, IReadOnlyList<PairState>>, GetPairsOfHandler>();
+            .AddScoped<IQueryHandler<GetPairsOf, IReadOnlyList<PairState>>, GetPairsOfHandler>()
+            .AddScoped<IQueryHandler<ExportPairs, PairsPage>, ExportPairsHandler>();
 }

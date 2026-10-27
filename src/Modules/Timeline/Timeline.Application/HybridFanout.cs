@@ -92,23 +92,28 @@ public sealed class PulledReads(IPullRegistry registry, IPullLists lists, IRecen
         return list;
     }
 
-    /// <summary>The newest posts of each pulled author after the cursor (at most <paramref name="want"/> each); Full when an author may have more.</summary>
-    public async Task<(IReadOnlyList<FeedItem> Items, bool Full)> Read(IReadOnlyList<Guid> authors, Guid? before, int want, CancellationToken cancellationToken)
+    /// <summary>
+    /// The newest posts of each pulled author after the cursor (at most <paramref name="want"/> each);
+    /// Full when an author may have more; Partial when an author was left out, late or failed (s3-l17).
+    /// </summary>
+    public async Task<(IReadOnlyList<FeedItem> Items, bool Full, bool Partial)> Read(IReadOnlyList<Guid> authors, Guid? before, int want, CancellationToken cancellationToken)
     {
         if (authors.Count == 0)
         {
-            return ([], false);
+            return ([], false, false);
         }
 
-        var pages = (await Task.WhenAll(authors.Select(a => WithinBudget(a, before, want, cancellationToken)))).Where(p => p is not null).Select(p => p!).ToList();
+        var answers = await Task.WhenAll(authors.Select(a => WithinBudget(a, before, want, cancellationToken)));
+        var pages = answers.Where(p => p is not null).Select(p => p!).ToList();
+        var partial = pages.Count < answers.Length;
         var posts = pages.SelectMany(p => p).ToList();
         if (posts.Count == 0)
         {
-            return ([], false);
+            return ([], false, partial);
         }
 
         var cards = (await profiles.Get([.. posts.Select(p => p.AuthorId).Distinct()], cancellationToken)).ToDictionary(a => a.AccountId);
-        return ([.. posts.Where(p => cards.ContainsKey(p.AuthorId)).Select(p => new FeedItem(p, cards[p.AuthorId]))], pages.Any(p => p.Count >= want));
+        return ([.. posts.Where(p => cards.ContainsKey(p.AuthorId)).Select(p => new FeedItem(p, cards[p.AuthorId]))], pages.Any(p => p.Count >= want), partial);
     }
 
     private async Task<IReadOnlyList<PostCard>?> WithinBudget(Guid author, Guid? before, int want, CancellationToken cancellationToken)

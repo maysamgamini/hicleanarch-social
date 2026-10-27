@@ -16,4 +16,11 @@ internal sealed class EfProfileReads(ReadOnlyDb<AccountsDbContext> reader) : IPr
 
     public async Task<IReadOnlyList<Account>> FindMany(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) =>
         await reader.Context.Accounts.Where(a => ids.Contains(a.Id)).ToListAsync(cancellationToken);
+
+    // Keyset: one index range on the primary key, from just after the last id of the previous page.
+    public async Task<IReadOnlyList<Account>> Page(Guid? after, int limit, CancellationToken cancellationToken) =>
+        await (after is { } last
+            ? reader.Context.Accounts.FromSql($"SELECT * FROM accounts.accounts WHERE id > {last} ORDER BY id LIMIT {limit}")
+            : reader.Context.Accounts.FromSql($"SELECT * FROM accounts.accounts ORDER BY id LIMIT {limit}"))
+            .ToListAsync(cancellationToken);
 }

@@ -127,9 +127,10 @@ public static class TimelineModule
 
 internal sealed record DeliveryReply(Guid PostId, DateTimeOffset StoredAt, DateTimeOffset? FannedOutAt, long FollowersReached);
 
-internal sealed record FeedReply(IReadOnlyList<FeedItemReply> Items, string? NextCursor, bool HasMore)
+/// <summary><c>partial</c>: a source of the page did not answer in time, so it may lack posts that are there (s3-l17).</summary>
+internal sealed record FeedReply(IReadOnlyList<FeedItemReply> Items, string? NextCursor, bool HasMore, bool Partial)
 {
-    public static FeedReply Of(FeedPage page) => new([.. page.Items.Select(FeedItemReply.Of)], page.NextCursor, page.NextCursor is not null);
+    public static FeedReply Of(FeedPage page) => new([.. page.Items.Select(FeedItemReply.Of)], page.NextCursor, page.NextCursor is not null, page.Partial);
 }
 
 internal sealed record AuthorReply(Guid AccountId, string Handle, string DisplayName);

@@ -10,8 +10,12 @@ public sealed record ReadFeed(Guid ReaderId, int Limit, string? Cursor = null) :
 
 public sealed record FeedItem(PostCard Post, AuthorCard Author);
 
-/// <summary><paramref name="NextCursor"/> continues after the last item; null when nothing older remains.</summary>
-public sealed record FeedPage(IReadOnlyList<FeedItem> Items, string? NextCursor);
+/// <summary>
+/// <paramref name="NextCursor"/> continues after the last item; null when nothing older remains.
+/// <paramref name="Partial"/>: the page was served without one of its sources (a pulled author that
+/// answered late or failed), so it may lack posts that are there (s3-l17).
+/// </summary>
+public sealed record FeedPage(IReadOnlyList<FeedItem> Items, string? NextCursor, bool Partial = false);
 
 /// <summary>
 /// A page of the feed: the timeline gives ids in time order, Posts and Accounts give their content in
@@ -100,7 +104,7 @@ public sealed class ReadFeedHandler(
         }
 
         // The pulled side, after the timeline: the two share this request's module reads, one at a time.
-        var (pulled, pulledFull) = pulls is null ? ([], false) : await PullPage(reader, followed, after, limit + 5, cancellationToken);
+        var (pulled, pulledFull, partial) = pulls is null ? ([], false, false) : await PullPage(reader, followed, after, limit + 5, cancellationToken);
         var merged = items.Concat(pulled.Where(filter.Shows)).DistinctBy(i => i.Post.PostId)
             .OrderByDescending(i => TimelineRules.Score(i.Post.PostId))
             .ThenByDescending(i => TimelineRules.Member(i.Post.PostId), StringComparer.Ordinal)
@@ -112,7 +116,7 @@ public sealed class ReadFeedHandler(
         await seen.Saw(reader, [.. page.Select(i => i.Post)], cancellationToken);
         var more = page.Count > 0 && (merged.Count > limit || !exhausted || pulledFull);
         var next = more ? cursors.Issue(reader, new FeedPosition(TimelineRules.Score(page[^1].Post.PostId), page[^1].Post.PostId)) : null;
-        return Result.Success(new FeedPage(page, next));
+        return Result.Success(new FeedPage(page, next, partial));
     }
 
     /// <summary>A later page before the rebuild job got to it: rebuild here, or wait for the task that is.</summary>
@@ -138,7 +142,7 @@ public sealed class ReadFeedHandler(
             ? []
             : (await profiles.Get([.. cards.Select(c => c.AuthorId).Distinct()], cancellationToken)).ToDictionary(a => a.AccountId);
         var items = cards.Where(c => authors.ContainsKey(c.AuthorId)).Select(c => new FeedItem(c, authors[c.AuthorId])).Where(filter.Shows);
-        var (pulled, pulledFull) = pulls is null ? ([], false) : await PullPage(reader, followed, null, want, cancellationToken);
+        var (pulled, pulledFull, partial) = pulls is null ? ([], false, false) : await PullPage(reader, followed, null, want, cancellationToken);
         var complete = items.Concat(pulled.Where(filter.Shows)).DistinctBy(i => i.Post.PostId)
             .Where(i => line is null || TimelineRules.Score(i.Post.PostId) > line)
             .OrderByDescending(i => TimelineRules.Score(i.Post.PostId))
@@ -150,10 +154,10 @@ public sealed class ReadFeedHandler(
         var authorFull = cards.GroupBy(c => c.AuthorId).Any(g => g.Count() >= want);
         var more = page.Count > 0 && (complete.Count > limit || line is not null || authorFull || pulledFull);
         var next = more ? cursors.Issue(reader, new FeedPosition(TimelineRules.Score(page[^1].Post.PostId), page[^1].Post.PostId)) : null;
-        return new FeedPage(page, next);
+        return new FeedPage(page, next, partial);
     }
 
-    private async Task<(IReadOnlyList<FeedItem> Items, bool Full)> PullPage(Guid reader, IReadOnlySet<Guid> followed, FeedPosition? after, int want, CancellationToken cancellationToken)
+    private async Task<(IReadOnlyList<FeedItem> Items, bool Full, bool Partial)> PullPage(Guid reader, IReadOnlySet<Guid> followed, FeedPosition? after, int want, CancellationToken cancellationToken)
     {
         var authors = await pulls!.PullListOf(reader, followed, cancellationToken);
         // A post id is the timeline's (score, id) order: "older than the cursor's post" is the tie filter itself.

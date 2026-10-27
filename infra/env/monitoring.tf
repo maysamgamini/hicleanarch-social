@@ -17,6 +17,7 @@ locals {
     "social.invariant.follows_across_block",
     "social.invariant.timelines_above_800",
     "social.invariant.posts_not_fanned_out",
+    "social.relationships.ledger_oldest_age",
   ])
 
   # Gauges that must read zero: any other value is a rule broken.
@@ -70,6 +71,21 @@ resource "aws_cloudwatch_metric_alarm" "projection_lag" {
   threshold           = 60
   comparison_operator = "GreaterThanThreshold"
   treat_missing_data  = "notBreaching"
+}
+
+# The follower-count ledger is folded every second; a change older than a minute means no worker is
+# folding (s3-l17). Missing data counts as breaching: the gauge itself stops when every worker is gone.
+resource "aws_cloudwatch_metric_alarm" "ledger_age" {
+  alarm_name          = "${var.project}-relationships-ledger-age"
+  alarm_description   = "The oldest follower change still to fold is older than 60 s for 2 minutes: follower counts are not moving."
+  namespace           = local.metrics_namespace
+  metric_name         = "social.relationships.ledger_oldest_age"
+  statistic           = "Maximum"
+  period              = 60
+  evaluation_periods  = 2
+  threshold           = 60
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "breaching"
 }
 
 # The read path's budget: a feed page in 200 ms at p99 (design objective).

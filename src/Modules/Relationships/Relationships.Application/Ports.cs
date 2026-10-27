@@ -59,6 +59,10 @@ public interface IRelationshipReads
 
     /// <summary>Blocked by the viewer, blocking the viewer, or muted by the viewer.</summary>
     Task<IReadOnlyList<Guid>> HiddenFrom(Guid viewer, CancellationToken cancellationToken);
+
+    /// <summary>Pairs in (low, high) order after the given one, with their versions and the edges that are on.</summary>
+    Task<IReadOnlyList<(Guid Low, Guid High, long Version, IReadOnlyList<(string Kind, Guid From, Guid To, DateTimeOffset Since)> Edges)>> PairsPage(
+        (Guid Low, Guid High)? after, int limit, CancellationToken cancellationToken);
 }
 
 /// <summary>Whether an account exists and is active. Accounts answers it; this module never reads its tables.</summary>

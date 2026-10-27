@@ -212,7 +212,7 @@ run "every_alarm_names_a_metric_the_program_emits" {
     condition = alltrue(concat(
       [for a in aws_cloudwatch_metric_alarm.invariant : contains(local.metrics, a.metric_name)],
       [for a in aws_cloudwatch_metric_alarm.outbox_age : contains(local.metrics, a.metric_name)],
-      [for a in [aws_cloudwatch_metric_alarm.fanout_lag, aws_cloudwatch_metric_alarm.projection_lag, aws_cloudwatch_metric_alarm.feed_p99] : contains(local.metrics, a.metric_name)],
+      [for a in [aws_cloudwatch_metric_alarm.fanout_lag, aws_cloudwatch_metric_alarm.projection_lag, aws_cloudwatch_metric_alarm.feed_p99, aws_cloudwatch_metric_alarm.ledger_age] : contains(local.metrics, a.metric_name)],
     ))
     error_message = "Every alarm names a metric the program emits."
   }
@@ -230,6 +230,11 @@ run "every_alarm_names_a_metric_the_program_emits" {
   assert {
     condition     = aws_cloudwatch_metric_alarm.fanout_lag.threshold == 60 && aws_cloudwatch_metric_alarm.fanout_lag.extended_statistic == "p99"
     error_message = "Fanned out within a minute at p99 is the alarm's line."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.ledger_age.threshold == 60 && aws_cloudwatch_metric_alarm.ledger_age.treat_missing_data == "breaching"
+    error_message = "A follower ledger not folded for a minute alarms, and so does a gauge that stopped."
   }
 }
 

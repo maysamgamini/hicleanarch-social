@@ -75,4 +75,39 @@ internal sealed class SqlRelationshipReads(RelationshipsDbContext db) : IRelatio
             ? new RelationshipPage(rows[..limit], rows[limit - 1].AccountId)
             : new RelationshipPage(rows, null);
     }
+
+    // Keyset on the pair key, then the page's edges in one more statement.
+    public async Task<IReadOnlyList<(Guid Low, Guid High, long Version, IReadOnlyList<(string Kind, Guid From, Guid To, DateTimeOffset Since)> Edges)>> PairsPage(
+        (Guid Low, Guid High)? after, int limit, CancellationToken cancellationToken)
+    {
+        var pairs = after is { } a
+            ? await db.Read("""
+                SELECT low_id, high_id, version FROM relationships.pair_versions
+                WHERE (low_id, high_id) > (@low, @high) ORDER BY low_id, high_id LIMIT @limit
+                """, r => (Low: r.GetGuid(0), High: r.GetGuid(1), Version: r.GetInt64(2)), cancellationToken, ("low", a.Low), ("high", a.High), ("limit", limit))
+            : await db.Read("""
+                SELECT low_id, high_id, version FROM relationships.pair_versions ORDER BY low_id, high_id LIMIT @limit
+                """, r => (Low: r.GetGuid(0), High: r.GetGuid(1), Version: r.GetInt64(2)), cancellationToken, ("limit", limit));
+        if (pairs.Count == 0)
+        {
+            return [];
+        }
+
+        var edges = await db.Read("""
+            WITH page AS (SELECT * FROM unnest(@lows::uuid[], @highs::uuid[]) AS p(low_id, high_id))
+            SELECT LEAST(follower_id, followee_id), GREATEST(follower_id, followee_id), 'Follow', follower_id, followee_id, created_at FROM relationships.follows
+              WHERE (LEAST(follower_id, followee_id), GREATEST(follower_id, followee_id)) IN (SELECT low_id, high_id FROM page)
+            UNION ALL
+            SELECT LEAST(blocker_id, blocked_id), GREATEST(blocker_id, blocked_id), 'Block', blocker_id, blocked_id, created_at FROM relationships.blocks
+              WHERE (LEAST(blocker_id, blocked_id), GREATEST(blocker_id, blocked_id)) IN (SELECT low_id, high_id FROM page)
+            UNION ALL
+            SELECT LEAST(muter_id, muted_id), GREATEST(muter_id, muted_id), 'Mute', muter_id, muted_id, created_at FROM relationships.mutes
+              WHERE (LEAST(muter_id, muted_id), GREATEST(muter_id, muted_id)) IN (SELECT low_id, high_id FROM page)
+            """, r => (Low: r.GetGuid(0), High: r.GetGuid(1), Kind: r.GetString(2), From: r.GetGuid(3), To: r.GetGuid(4), Since: r.GetFieldValue<DateTimeOffset>(5)),
+            cancellationToken, ("lows", pairs.Select(p => p.Low).ToArray()), ("highs", pairs.Select(p => p.High).ToArray()));
+        // The pair key as PostgreSQL orders uuids (LEAST, GREATEST), not as .NET compares Guids.
+        var byPair = edges.ToLookup(e => (e.Low, e.High));
+        return [.. pairs.Select(p => (p.Low, p.High, p.Version,
+            (IReadOnlyList<(string, Guid, Guid, DateTimeOffset)>)[.. byPair[(p.Low, p.High)].Select(e => (e.Kind, e.From, e.To, e.Since))]))];
+    }
 }

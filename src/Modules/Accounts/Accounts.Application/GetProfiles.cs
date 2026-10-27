@@ -29,6 +29,29 @@ public sealed class GetProfilesHandler(IProfileReads accounts) : IQueryHandler<G
     }
 }
 
+/// <summary>The follow's check that the followee is active: the writer, so a new account is found at once.</summary>
+[ReadsTheWriter]
+public sealed class IsAccountActiveHandler(IAccountRepository accounts) : IQueryHandler<IsAccountActive, bool>
+{
+    public async Task<Result<bool>> Handle(IsAccountActive query, CancellationToken cancellationToken) =>
+        Result.Success(await accounts.Find(query.AccountId, cancellationToken) is { Status: AccountStatus.Active });
+}
+
+/// <summary>The export, a page at a time, from the read side.</summary>
+public sealed class ExportAccountsHandler(IProfileReads accounts) : IQueryHandler<ExportAccounts, AccountsPage>
+{
+    public const int MaxLimit = 1_000;
+
+    public async Task<Result<AccountsPage>> Handle(ExportAccounts query, CancellationToken cancellationToken)
+    {
+        var limit = Math.Clamp(query.Limit, 1, MaxLimit);
+        var page = await accounts.Page(query.After, limit, cancellationToken);
+        return Result.Success(new AccountsPage(
+            [.. page.Select(a => new ExportedAccount(a.Id, a.Handle.Value, a.DisplayName, a.Status == AccountStatus.Active, a.RegisteredAt))],
+            page.Count == limit ? page[^1].Id : null));
+    }
+}
+
 internal static class ProfileMapping
 {
     public static Profile ToProfile(this Account account) =>

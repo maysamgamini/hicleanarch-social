@@ -39,3 +39,18 @@ public sealed record GetPairsOf(Guid AccountId) : IQuery<IReadOnlyList<PairState
 
 /// <summary>One direction of one kind of relationship between two accounts. Kind: Follow, Block or Mute.</summary>
 public sealed record PairState(string Kind, Guid From, Guid To, bool On, long PairVersion);
+
+/// <summary>A relationship that is on, in one direction, since when.</summary>
+public sealed record ExportedEdge(string Kind, Guid From, Guid To, DateTimeOffset Since);
+
+/// <summary>A pair of accounts with its version and every relationship of the pair that is on (none, if all ended).</summary>
+public sealed record ExportedPair(Guid LowId, Guid HighId, long PairVersion, IReadOnlyList<ExportedEdge> Edges);
+
+/// <summary>
+/// Every pair that ever had a relationship, a page at a time in (low, high) order after the given pair
+/// (s3-l17): the export a service extracted in Stages 4 and 5 fills its copy from, versions included, so
+/// the events that follow apply on top of it. <see cref="PairsPage.NextLow"/> is null on the last page.
+/// </summary>
+public sealed record ExportPairs(Guid? AfterLow, Guid? AfterHigh, int Limit) : IQuery<PairsPage>;
+
+public sealed record PairsPage(IReadOnlyList<ExportedPair> Pairs, Guid? NextLow, Guid? NextHigh);

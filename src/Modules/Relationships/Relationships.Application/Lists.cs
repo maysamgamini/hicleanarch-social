@@ -73,3 +73,20 @@ public sealed class GetPairsOfHandler(IRelationshipReads reads) : IQueryHandler<
         Result.Success<IReadOnlyList<PairState>>([.. (await reads.PairsOf(query.AccountId, cancellationToken))
             .Select(p => new PairState(p.Kind, p.From, p.To, p.On, p.Version))]);
 }
+
+/// <summary>The pairs export, a page at a time (s3-l17).</summary>
+public sealed class ExportPairsHandler(IRelationshipReads reads) : IQueryHandler<ExportPairs, PairsPage>
+{
+    public const int MaxLimit = 1_000;
+
+    public async Task<Result<PairsPage>> Handle(ExportPairs query, CancellationToken cancellationToken)
+    {
+        var limit = Math.Clamp(query.Limit, 1, MaxLimit);
+        var after = query.AfterLow is { } low && query.AfterHigh is { } high ? (low, high) : ((Guid, Guid)?)null;
+        var page = await reads.PairsPage(after, limit, cancellationToken);
+        var last = page.Count == limit ? page[^1] : default;
+        return Result.Success(new PairsPage(
+            [.. page.Select(p => new ExportedPair(p.Low, p.High, p.Version, [.. p.Edges.Select(e => new ExportedEdge(e.Kind, e.From, e.To, e.Since))]))],
+            page.Count == limit ? last.Low : null, page.Count == limit ? last.High : null));
+    }
+}

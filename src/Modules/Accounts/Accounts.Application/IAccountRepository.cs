@@ -39,4 +39,7 @@ public interface IProfileReads
     Task<Account?> FindByHandle(Handle handle, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<Account>> FindMany(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken);
+
+    /// <summary>Accounts in id order after <paramref name="after"/>, at most <paramref name="limit"/>: the export.</summary>
+    Task<IReadOnlyList<Account>> Page(Guid? after, int limit, CancellationToken cancellationToken);
 }
